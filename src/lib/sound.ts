@@ -2,7 +2,7 @@
  * Optional ambience, synthesised with Web Audio so there are no audio files to load.
  * Off by default; nothing is created until the visitor turns it on (browsers require a gesture anyway).
  */
-type Blip = 'key' | 'enter' | 'switch' | 'whoosh';
+type Blip = 'key' | 'enter' | 'switch' | 'whoosh' | 'quack' | 'purr';
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
@@ -79,7 +79,7 @@ export function onSoundChange(fn: (on: boolean) => void): () => void {
   return () => listeners.delete(fn);
 }
 
-const BLIPS: Record<Blip, { freq: number; q: number; len: number; gain: number; rate: number }> = {
+const BLIPS: Record<Exclude<Blip, 'quack' | 'purr'>, { freq: number; q: number; len: number; gain: number; rate: number }> = {
   key: { freq: 3200, q: 1.2, len: 0.035, gain: 0.5, rate: 6 },
   enter: { freq: 1800, q: 1, len: 0.06, gain: 0.6, rate: 5 },
   switch: { freq: 2400, q: 4, len: 0.05, gain: 0.9, rate: 3 },
@@ -89,6 +89,8 @@ const BLIPS: Record<Blip, { freq: number; q: number; len: number; gain: number; 
 /** Short one-shot sounds: key clicks, the lamp switch, the jet passing by. No-op while sound is off. */
 export function blip(kind: Blip): void {
   if (!on || !ctx || !master || !noise) return;
+  if (kind === 'quack') return quack(ctx, master);
+  if (kind === 'purr') return purr(ctx, master, noise);
   const { freq, q, len, gain, rate } = BLIPS[kind];
   const t = ctx.currentTime;
   const src = ctx.createBufferSource();
@@ -110,4 +112,54 @@ export function blip(kind: Blip): void {
   src.connect(band).connect(env).connect(master);
   src.start(t, Math.random() * 3);
   src.stop(t + len + 0.05);
+}
+
+/** Rubber duck: a nasal saw tone that drops in pitch, twice. */
+function quack(c: AudioContext, out: AudioNode) {
+  for (const delay of [0, 0.16]) {
+    const t = c.currentTime + delay;
+    const osc = c.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(620, t);
+    osc.frequency.exponentialRampToValueAtTime(380, t + 0.11);
+    const formant = c.createBiquadFilter();
+    formant.type = 'bandpass';
+    formant.frequency.value = 1300;
+    formant.Q.value = 3;
+    const env = c.createGain();
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.exponentialRampToValueAtTime(0.35, t + 0.015);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+    osc.connect(formant).connect(env).connect(out);
+    osc.start(t);
+    osc.stop(t + 0.14);
+  }
+}
+
+/** Cat: low noise pulsing ~25 times a second for a second and a half. */
+function purr(c: AudioContext, out: AudioNode, buf: AudioBuffer) {
+  const t = c.currentTime;
+  const src = c.createBufferSource();
+  src.buffer = buf;
+  src.playbackRate.value = 0.5;
+  const low = c.createBiquadFilter();
+  low.type = 'lowpass';
+  low.frequency.value = 260;
+  const amp = c.createGain();
+  amp.gain.value = 0.5;
+  const lfo = c.createOscillator();
+  lfo.frequency.value = 25;
+  const depth = c.createGain();
+  depth.gain.value = 0.5;
+  lfo.connect(depth).connect(amp.gain);
+  const env = c.createGain();
+  env.gain.setValueAtTime(0.0001, t);
+  env.gain.exponentialRampToValueAtTime(1.2, t + 0.25);
+  env.gain.setValueAtTime(1.2, t + 1.1);
+  env.gain.exponentialRampToValueAtTime(0.0001, t + 1.6);
+  src.connect(low).connect(amp).connect(env).connect(out);
+  src.start(t, Math.random() * 2);
+  lfo.start(t);
+  src.stop(t + 1.7);
+  lfo.stop(t + 1.7);
 }

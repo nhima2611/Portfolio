@@ -159,9 +159,9 @@ export function Sections() {
       </Stop>
 
       <Stop id="off-duty" index={4}>
-        <p className="where">top shelf · off duty</p>
+        <p className="where">desk runway · off duty</p>
         <h2>Off duty, I look up.</h2>
-        <p>The Su-57 on the top shelf is a nod to my other interest: fighter jets, especially twin-engine air-superiority designs. Both worlds reward the same things: tight engineering and systems that hold up under load.</p>
+        <p>The Su-57 parked on the desk is a nod to my other interest: fighter jets, especially twin-engine air-superiority designs. Both worlds reward the same things: tight engineering and systems that hold up under load. Hit launch for a short airshow.</p>
         <LaunchButton />
       </Stop>
 

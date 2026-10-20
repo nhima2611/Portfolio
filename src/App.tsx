@@ -21,7 +21,10 @@ export default function App() {
 
   return (
     <>
-      <div className="scene" aria-label="A night-time desk with a monitor, laptop, bookshelf, a model jet and a phone. Click an object to jump to its section.">
+      <div
+        className="scene"
+        aria-label="A night-time desk with a monitor, laptop, bookshelf, a model jet and a phone. Click an object to jump to its section."
+      >
         <Canvas
           shadows
           flat
@@ -36,7 +39,7 @@ export default function App() {
               requestAnimationFrame(() => {
                 restartIntroClock();
                 document.documentElement.classList.add('booted');
-              }),
+              })
             );
           }}
         >

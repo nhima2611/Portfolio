@@ -29,14 +29,18 @@ export const STOPS: CameraStop[] = [
   { position: [-0.36, 1.02, 0.5], target: [-0.47, 0.88, -0.1], shift: 0.2 }, // laptop
   { position: [0.15, 1.1, 0.6], target: [0.15, 1.08, -0.26], shift: -0.2 }, // monitor
   { position: [0.95, 1.55, 0.75], target: [1.3, 1.5, -0.35], shift: -0.2 }, // bookshelf
-  { position: [1.08, 1.92, 0.12], target: [1.35, 1.85, -0.38], shift: -0.2 }, // model jet
+  { position: [1.0, 1.0, 0.95], target: [0.52, 0.83, 0.37], shift: -0.2 }, // model jet, parked on the desk runway
   { position: [0.36, 1.12, 0.52], target: [0.42, 0.78, 0.22], shift: -0.2 }, // phone
 ];
 
 export const INTRO_CAMERA: [number, number, number] = [3.3, 2.35, 3.9];
 
-/** Wide shot the camera pulls back to while the model jet laps the room. */
-export const FLIGHT_CAMERA: Pick<CameraStop, 'position' | 'target'> = { position: [2.6, 2.25, 2.9], target: [0.4, 1.9, 0] };
+/**
+ * Airshow camera: a spectator at VANTAGE following the jet with a zoom lens. The camera stays FOLLOW_DISTANCE
+ * from the jet on the line toward VANTAGE, always looking at it.
+ */
+export const VANTAGE: [number, number, number] = [0.5, 1.7, 3.4];
+export const FOLLOW_DISTANCE = 1.7;
 
 /** Section ids, used by click-to-scroll on objects. */
 export const SECTION_IDS = ['intro', 'about', 'experience', 'toolkit', 'off-duty', 'contact'] as const;

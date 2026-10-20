@@ -3,38 +3,80 @@ import { useFrame, useLoader } from '@react-three/fiber';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import { blip } from '../../lib/sound';
 import { COLORS } from '../config';
+import { FLARE_SALVOS, MANOEUVRES, MISSILE_AT, PARKED, gearAt, sampleFlight, timeAt, within, type FlightSample } from '../flight';
 import { createJet } from '../geometry';
 import { hoverAmount } from '../hover';
 import { atJetStop, interactive, launchJetWithSound, scrollToSection } from '../interaction';
-import { jetFlight, sceneState } from '../state';
+import { FLIGHT_LEN, jetFlight, sceneState } from '../state';
+import { fireFlares, fireMissile } from './FlightFX';
 
-const POS: [number, number, number] = [1.35, 1.86, -0.38];
-const REST = new THREE.Euler(0.12, -0.9, 0.18);
+/** Parked at the right end of the desk runway, nose to -x, standing on its own gear (the pivot is at wheel level). */
+const REST = new THREE.Euler(0, Math.PI / 2, 0);
 
-/** A lap above the desk: lift off the shelf, circle the room's right half (clear of the text panel), settle back on the stand. Stays off the back wall (z > -0.5). */
-const FLIGHT_PATH = new THREE.CatmullRomCurve3(
-  [
-    POS,
-    [1.3, 1.95, -0.22],
-    [1.0, 2.04, 0.35],
-    [0.45, 2.08, 0.72],
-    [-0.15, 2.02, 0.5],
-    [-0.3, 1.98, 0.0],
-    [0.2, 2.03, -0.3],
-    [0.9, 1.98, -0.34],
-    [1.3, 1.9, -0.39],
-    POS,
-  ].map((p) => new THREE.Vector3(...p)),
-  false,
-  'centripetal',
-);
-
-const easeInOutSine = (t: number) => -(Math.cos(Math.PI * t) - 1) / 2;
 const smoothstep = (a: number, b: number, t: number) => {
   const x = Math.max(0, Math.min(1, (t - a) / (b - a)));
   return x * x * (3 - 2 * x);
 };
+const easeInOutSine = (t: number) => -(Math.cos(Math.PI * t) - 1) / 2;
+/** Up then back down over a window: 0 at the ends, 1 through the middle. */
+const hump = (m: number, rise = 0.3, fall = 0.7) => smoothstep(0, rise, m) * (1 - smoothstep(fall, 1, m));
+
+/** Seconds into the airshow, or null when parked. */
+const showSeconds = () => {
+  const t = jetFlight();
+  return t === null ? null : t * FLIGHT_LEN;
+};
+
+/** Attitude and position changes the manoeuvres add on top of the flight path. */
+interface Overlay {
+  pitch: number;
+  yaw: number;
+  roll: number;
+  up: number;
+  left: number;
+  forward: number;
+}
+
+function manoeuvres(s: FlightSample, o: Overlay): Overlay {
+  o.pitch = o.yaw = o.roll = o.up = o.left = o.forward = 0;
+  let m: number;
+  // Angle of attack: the nose rides higher the slower the jet flies.
+  if (!s.grounded) o.pitch += 0.2 * THREE.MathUtils.clamp(1 - s.speed / 1.4, 0, 1);
+  // Take-off rotation and landing flare: nose up on the main wheels.
+  if ((m = within(MANOEUVRES.rotate, s.wp)) >= 0) o.pitch += 0.16 * hump(m, 0.45, 0.65);
+  if ((m = within(MANOEUVRES.landingFlare, s.wp)) >= 0) o.pitch += 0.13 * hump(m, 0.4, 0.75);
+  // Barrel roll: a full roll while the jet traces a helix around its path.
+  if ((m = within(MANOEUVRES.barrelRoll, s.wp)) >= 0) {
+    const phi = Math.PI * 2 * easeInOutSine(m);
+    o.roll += phi;
+    o.up += 0.08 * Math.sin(phi);
+    o.left += 0.08 * (1 - Math.cos(phi));
+  }
+  // Pugachev's cobra: pitch past vertical and back with almost no change of path.
+  if ((m = within(MANOEUVRES.cobra, s.wp)) >= 0) {
+    const h = hump(m, 0.35, 0.62);
+    o.pitch += 1.8 * h;
+    o.up += 0.03 * h;
+  }
+  // Kulbit: a full somersault in little more than the jet's own length.
+  if ((m = within(MANOEUVRES.kulbit, s.wp)) >= 0) {
+    const phi = Math.PI * 2 * easeInOutSine(m);
+    o.pitch += phi;
+    o.up += 0.07 * (1 - Math.cos(phi));
+    o.forward -= 0.03 * Math.sin(phi);
+  }
+  // Falling leaf: nose high and stalled, yawing side to side while the path sinks.
+  if ((m = within(MANOEUVRES.leaf, s.wp)) >= 0) {
+    const swing = smoothstep(0.1, 0.25, m) * (1 - smoothstep(0.75, 0.9, m));
+    const phase = m * Math.PI * 2 * 1.5;
+    o.pitch += 1.0 * hump(m, 0.15, 0.82);
+    o.yaw += 0.85 * swing * Math.sin(phase);
+    o.roll += -0.35 * swing * Math.sin(phase + 0.6);
+  }
+  return o;
+}
 
 /**
  * Su-57 Felon by bohmerang (Sketchfab), CC BY-NC-SA 4.0, optimised with gltf-transform (meshopt, WebP 1024px).
@@ -61,8 +103,9 @@ function useHoverGlow(materials: THREE.MeshStandardMaterial[], strength: number)
 
 function Su57() {
   const gltf = useLoader(GLTFLoader, MODEL_URL, extendLoader);
-  const { model, materials, gearDown, gearUp } = useMemo(() => {
-    const root = gltf.scene;
+  const { model, materials, gearUp, rig } = useMemo(() => {
+    // Work on a clone: the cached gltf.scene must stay untouched, or a remount (HMR, StrictMode) would re-centre and re-scale it again.
+    const root = gltf.scene.clone(true);
     root.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(root);
     const size = box.getSize(new THREE.Vector3());
@@ -90,22 +133,36 @@ function Su57() {
         materials.add(m);
       }
     });
-    // The model ships both gear states: down (with lights) for the shelf, up (closed doors) for flight.
+    // The model ships both gear states as static meshes: extended legs (with lights) and closed bay doors.
+    // To animate between them, the extended gear hangs from a rig at the top of the gear bay and is scaled
+    // vertically: 0 tucks it into the bay, 1 is fully down.
     const gearDown: THREE.Object3D[] = [];
     const gearUp: THREE.Object3D[] = [];
     root.traverse((o) => {
       if (o.name.startsWith('SU57-landingOff')) gearUp.push(o);
       else if (o.name.startsWith('SU57-landingOn')) gearDown.push(o);
     });
-    return { model, materials: [...materials], gearDown, gearUp };
+    const bay = new THREE.Box3();
+    gearDown.forEach((o) => bay.expandByObject(o));
+    // `bay` is in the model's own space (measured before root moved), which is also root's local space.
+    const rig = new THREE.Group();
+    rig.position.set((bay.min.x + bay.max.x) / 2, bay.max.y, (bay.min.z + bay.max.z) / 2);
+    root.add(rig);
+    root.updateMatrixWorld(true);
+    gearDown.forEach((o) => rig.attach(o));
+
+    // Stand on the wheels: shift the model up so the lowest point (the tyres) sits on the pivot.
+    model.position.y = (center.y - box.min.y) * model.scale.y;
+
+    return { model, materials: [...materials], gearUp, rig };
   }, [gltf]);
 
   useHoverGlow(materials, 0.12);
   useFrame(() => {
-    const t = jetFlight();
-    const up = t !== null && t > 0.06 && t < 0.92;
-    for (const o of gearUp) o.visible = up;
-    for (const o of gearDown) o.visible = !up;
+    const e = gearAt(showSeconds());
+    rig.scale.y = Math.max(0.001, e);
+    rig.visible = e > 0.01;
+    for (const o of gearUp) o.visible = e <= 0.01;
   });
   return <primitive object={model} />;
 }
@@ -132,68 +189,134 @@ function LowPolyJet() {
   );
 
   useHoverGlow(useMemo(() => [skin], [skin]), 0.18);
-  return <primitive object={jet} scale={LENGTH / 6} />;
+  return <primitive object={jet} scale={LENGTH / 6} position-y={0.025} />;
 }
 
-/** Display model on the top shelf; it also flies a lap of the room on request. */
+/** Afterburner glow at the two nozzles, in the jet's own frame (nose -z). */
+const NOZZLES: [number, number, number][] = [
+  [-0.017, 0.036, 0.128],
+  [0.017, 0.036, 0.128],
+];
+
+/** The Su-57 parked on the desk; Launch sends it through a short airshow and back to the same spot. */
 export function ModelJet() {
   const pivot = useRef<THREE.Group>(null);
-  const tmp = useMemo(
-    () => ({ rest: new THREE.Quaternion(), fly: new THREE.Quaternion(), look: new THREE.Object3D(), a: new THREE.Vector3(), b: new THREE.Vector3(), euler: new THREE.Euler() }),
+  const burners = useRef<(THREE.Sprite | null)[]>([]);
+  const prev = useRef<number | null>(null);
+  const state = useMemo(
+    () => ({
+      sample: { position: new THREE.Vector3(), tangent: new THREE.Vector3(), speed: 0, accel: 0, bank: 0, wp: 0, grounded: true } as FlightSample,
+      overlay: {} as Overlay,
+      rest: new THREE.Quaternion().setFromEuler(REST),
+      look: new THREE.Object3D(),
+      target: new THREE.Quaternion(),
+      v: new THREE.Vector3(),
+      a: new THREE.Vector3(),
+      right: new THREE.Vector3(),
+      up: new THREE.Vector3(),
+    }),
     [],
   );
+  const flareTimes = useMemo(() => FLARE_SALVOS.map(timeAt), []);
+  const missileTime = useMemo(() => timeAt(MISSILE_AT), []);
 
-  useFrame(({ clock }) => {
+  useFrame((_, delta) => {
     const p = pivot.current;
     if (!p) return;
-    const sway = sceneState.reducedMotion ? 0 : Math.sin(clock.elapsedTime * 0.3) * 0.05;
-    tmp.euler.set(REST.x, REST.y + sway, REST.z);
-    tmp.rest.setFromEuler(tmp.euler);
-
-    const t = jetFlight();
-    if (t === null) {
-      p.position.set(...POS);
-      p.quaternion.copy(tmp.rest);
+    const sec = showSeconds();
+    if (sec === null) {
+      p.position.copy(PARKED);
+      p.quaternion.copy(state.rest);
+      prev.current = null;
+      burners.current.forEach((b) => b && (b.visible = false));
       return;
     }
 
-    // Position along the lap, nose along the tangent, banked into the turn.
-    const u = easeInOutSine(t);
-    FLIGHT_PATH.getPointAt(u, p.position);
-    FLIGHT_PATH.getTangentAt(u, tmp.a);
-    FLIGHT_PATH.getTangentAt(Math.min(1, u + 0.02), tmp.b);
-    const turn = tmp.a.x * tmp.b.z - tmp.a.z * tmp.b.x;
-    tmp.look.position.copy(p.position);
-    tmp.look.lookAt(tmp.b.copy(p.position).sub(tmp.a)); // +z faces away from travel, so the nose (-z) leads
-    tmp.look.rotateZ(THREE.MathUtils.clamp(turn * 18, -0.75, 0.75));
-    tmp.fly.copy(tmp.look.quaternion);
+    const s = sampleFlight(sec, state.sample);
+    const o = manoeuvres(s, state.overlay);
 
-    // Blend from and back to the display pose at either end.
-    const blend = smoothstep(0, 0.08, t) * (1 - smoothstep(0.9, 1, t));
-    p.quaternion.copy(tmp.rest).slerp(tmp.fly, blend);
+    // Heading and climb from the path, banked into turns, then the manoeuvre attitude on top.
+    const L = state.look;
+    L.position.copy(s.position);
+    L.lookAt(state.a.copy(s.position).sub(s.tangent)); // +z away from travel, so the nose (-z) leads
+    state.right.set(1, 0, 0).applyQuaternion(L.quaternion);
+    state.up.set(0, 1, 0).applyQuaternion(L.quaternion);
+    L.rotateZ(s.bank);
+    L.rotateY(o.yaw);
+    L.rotateX(o.pitch);
+    L.rotateZ(o.roll);
+
+    p.position.copy(s.position).addScaledVector(state.up, o.up).addScaledVector(state.right, -o.left).addScaledVector(s.tangent, o.forward);
+    // On the ground the nose comes up around the main wheels, not the pivot: lift the pivot to match.
+    if (s.position.y < PARKED.y + 0.05 && o.pitch > 0) p.position.y += Math.sin(o.pitch) * 0.07;
+    // Ease toward the target attitude; fast enough for a kulbit, smooth enough to hide sampling steps.
+    const k = 1 - Math.exp(-Math.min(delta, 0.05) * 16);
+    p.quaternion.slerp(L.quaternion, prev.current === null ? 1 : k);
+
+    // Afterburner: brightest while accelerating hard (take-off roll, pulling out of the cobra and kulbit).
+    const throttle = THREE.MathUtils.clamp(0.15 + s.accel * 0.9, 0, 1) * Math.min(1, s.speed * 4);
+    burners.current.forEach((b) => {
+      if (!b) return;
+      b.visible = throttle > 0.05;
+      const size = 0.01 + 0.018 * throttle * (0.85 + Math.random() * 0.3);
+      b.scale.set(size, size, 1);
+      (b.material as THREE.SpriteMaterial).opacity = throttle;
+    });
+
+    // Timed events: flare salvos and the missile shot, fired once as the show passes them.
+    const last = prev.current ?? -1;
+    state.v.copy(s.tangent).multiplyScalar(s.speed);
+    for (const ft of flareTimes) {
+      if (last < ft && sec >= ft) {
+        fireFlares(state.a.copy(p.position).addScaledVector(s.tangent, -0.09).addScaledVector(state.up, 0.02), state.v, state.right);
+        blip('switch');
+      }
+    }
+    if (last < missileTime && sec >= missileTime) {
+      fireMissile(state.a.copy(p.position).addScaledVector(state.up, 0.005), state.v);
+      blip('whoosh');
+    }
+    prev.current = sec;
+    sceneState.jet.x = p.position.x;
+    sceneState.jet.y = p.position.y;
+    sceneState.jet.z = p.position.z;
   });
 
   return (
     <group>
-      <group ref={pivot} position={POS} rotation={REST}>
+      <group ref={pivot} position={PARKED} rotation={REST}>
         <Suspense fallback={<LowPolyJet />}>
           <Su57 />
         </Suspense>
+        {NOZZLES.map((n, i) => (
+          <sprite key={i} ref={(el) => (burners.current[i] = el)} position={n} visible={false}>
+            <spriteMaterial map={burnerTexture()} color="#ff7a2e" blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} transparent />
+          </sprite>
+        ))}
       </group>
-      {/* Stand */}
-      <mesh position={[POS[0], 1.797, POS[2]]}>
-        <boxGeometry args={[0.004, 0.09, 0.004]} />
-        <meshStandardMaterial color="#2a2e38" metalness={0.6} roughness={0.5} />
-      </mesh>
-      <mesh position={[POS[0], 1.755, POS[2]]} castShadow>
-        <boxGeometry args={[0.07, 0.006, 0.05]} />
-        <meshStandardMaterial color="#2a2e38" metalness={0.6} roughness={0.5} />
-      </mesh>
-      {/* Generous invisible hit area so the small model is easy to click */}
-      <mesh position={POS} {...interactive('jet', () => (atJetStop() ? launchJetWithSound() : scrollToSection('off-duty')))}>
-        <sphereGeometry args={[0.16, 8, 6]} />
+      {/* Generous invisible hit area so the jet is easy to click */}
+      <mesh position={[PARKED.x, PARKED.y + 0.03, PARKED.z]} {...interactive('jet', () => (atJetStop() ? launchJetWithSound() : scrollToSection('off-duty')))}>
+        <sphereGeometry args={[0.13, 8, 6]} />
         <meshBasicMaterial visible={false} />
       </mesh>
     </group>
   );
+}
+
+let burnerTex: THREE.Texture | null = null;
+/** Shared soft glow for the afterburners (created once, never disposed: it lives as long as the page). */
+function burnerTexture() {
+  if (!burnerTex) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d')!;
+    const grd = g.createRadialGradient(32, 32, 1, 32, 32, 32);
+    grd.addColorStop(0, 'rgba(255,230,190,1)');
+    grd.addColorStop(0.3, 'rgba(255,170,90,.55)');
+    grd.addColorStop(1, 'rgba(255,120,40,0)');
+    g.fillStyle = grd;
+    g.fillRect(0, 0, 64, 64);
+    burnerTex = new THREE.CanvasTexture(c);
+  }
+  return burnerTex;
 }

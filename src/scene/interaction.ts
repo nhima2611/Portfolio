@@ -1,7 +1,8 @@
 import type { ThreeEvent } from '@react-three/fiber';
 import { JET_STOP, SECTION_LABELS, type SectionId } from './config';
-import { blip } from '../lib/sound';
-import { FLIGHT_LEN, isLampOn, jetFlight, launchJet, sceneState, type HoverTarget } from './state';
+import { blip, isSoundOn } from '../lib/sound';
+import { PANELS_BACK_AT } from './flight';
+import { isLampOn, jetFlight, launchJet, sceneState, type HoverTarget } from './state';
 
 export function scrollToSection(id: SectionId) {
   document.getElementById(id)?.scrollIntoView({ behavior: sceneState.reducedMotion ? 'auto' : 'smooth' });
@@ -19,13 +20,16 @@ export function launchJetWithSound(): boolean {
   blip('whoosh');
   const root = document.documentElement;
   root.classList.add('in-flight');
-  window.setTimeout(() => root.classList.remove('in-flight'), FLIGHT_LEN * 1000 - 600);
+  window.setTimeout(() => root.classList.remove('in-flight'), PANELS_BACK_AT() * 1000);
   return true;
 }
 
 /** Text for the tag that follows the pointer. */
 export function hoverLabel(target: HoverTarget): string {
   if (target === 'lamp') return isLampOn() ? 'Lights off' : 'Lights on';
+  if (target === 'headphones') return isSoundOn() ? 'Sound off' : 'Sound on';
+  if (target === 'duck') return 'Quack';
+  if (target === 'cat') return 'Pet the cat';
   if (target === 'jet') {
     if (!atJetStop()) return `${SECTION_LABELS['off-duty']} →`;
     if (sceneState.reducedMotion) return 'Parked';

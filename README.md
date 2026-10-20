@@ -60,6 +60,17 @@ npx @gltf-transform/cli optimize in.glb public/models/su57.glb --compress meshop
 
 Giữ `--join false --flatten false` để còn tách được node `SU57-landingOn*` / `SU57-landingOff*` (thả/thu bánh khi bay). Jet low-poly trong `geometry.ts` là fallback trong lúc GLB tải.
 
+## Airshow
+
+Bấm Launch (hoặc gõ `jet` trong terminal): Su-57 cất cánh từ mép trước của bàn, bay vòng, lăn thùng, thả pháo sáng, bắn tên lửa ra cửa sổ, rắn hổ mang, Kulbit, lá vàng rơi rồi hạ cánh lại đúng chỗ đậu.
+
+- **`scene/flight.ts`**: kịch bản bay. Danh sách waypoint `[x, y, z, tốc độ]`, cửa sổ động tác (`MANOEUVRES`), thời điểm pháo sáng / tên lửa, thu/thả càng, camera. Spline được lấy mẫu sẵn thành bảng vị trí/tốc độ/thời gian/độ nghiêng nên mỗi frame chỉ là tra bảng. Độ nghiêng cánh theo công thức cua phối hợp `tan(bank) = v²κ/g`.
+- **`objects/ModelJet.tsx`**: dựng tư thế từ bảng + chồng động tác lên, bắn sự kiện.
+- **`objects/FlightFX.tsx`**: pháo sáng, khói, tên lửa (pool cố định, không cấp phát giữa show).
+- Camera bám máy bay từ điểm `VANTAGE` trong `config.ts`, cách `FOLLOW_DISTANCE`.
+
+Sửa waypoint thì kiểm tra khoảng cách tới vật cản (màn hình, kệ, đèn, ghế) và độ cao không xuống dưới mặt bàn.
+
 ## Thay mô hình bằng GLB khác
 
 1. Đặt file vào `public/models/…` (nén trước: `npx @gltf-transform/cli optimize in.glb out.glb --compress meshopt`)

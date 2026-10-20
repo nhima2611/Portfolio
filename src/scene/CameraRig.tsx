@@ -1,8 +1,9 @@
 import { useEffect, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { FLIGHT_CAMERA, INTRO_CAMERA, JET_STOP, STOPS } from './config';
-import { clamp01, easeInOutCubic, introElapsed, introPower, isIntroDone, jetFlight, sceneState } from './state';
+import { FOLLOW_DISTANCE, INTRO_CAMERA, JET_STOP, STOPS, VANTAGE } from './config';
+import { cameraPullAt } from './flight';
+import { FLIGHT_LEN, clamp01, easeInOutCubic, introElapsed, introPower, isIntroDone, jetFlight, sceneState } from './state';
 
 const MOBILE_BREAKPOINT = 860;
 /** On narrow screens the panel sits at the bottom, so lift the object into the top part of the view. */
@@ -17,13 +18,11 @@ function sampleStops(progress: number) {
   return { position: mix(a.position, b.position), target: mix(a.target, b.target), shift: a.shift + (b.shift - a.shift) * t };
 }
 
-/** 0 … 1: how far to pull back to FLIGHT_CAMERA, while the jet is flying and the visitor is at its stop. */
+/** 0 … 1: how far to hand the camera to the airshow follow-cam, while the show runs and the visitor is at the jet's stop. */
 function flightPull(progress: number): number {
-  const f = jetFlight();
-  if (f === null) return 0;
-  const ease = (x: number) => x * x * (3 - 2 * x);
+  const t = jetFlight();
   const atStop = clamp01(1 - Math.abs(progress - JET_STOP) * 2);
-  return ease(clamp01(f / 0.12)) * ease(clamp01((1 - f) / 0.15)) * atStop;
+  return t === null ? 0 : cameraPullAt(t * FLIGHT_LEN) * atStop;
 }
 
 /**
@@ -43,6 +42,8 @@ export function CameraRig() {
       shift: STOPS[0].shift,
       lift: 0,
       tmp: new THREE.Vector3(),
+      chase: new THREE.Vector3(),
+      jetPos: new THREE.Vector3(),
       smooth: { x: 0, y: 0 },
     }),
     [],
@@ -58,11 +59,15 @@ export function CameraRig() {
     const stop = sampleStops(sceneState.progress);
     const pull = flightPull(sceneState.progress);
     if (pull > 0) {
-      stop.position = stop.position.map((v, k) => v + (FLIGHT_CAMERA.position[k] - v) * pull) as [number, number, number];
-      stop.target = stop.target.map((v, k) => v + (FLIGHT_CAMERA.target[k] - v) * pull) as [number, number, number];
+      // Follow the jet: stand FOLLOW_DISTANCE from it on the line toward the spectator's vantage point.
+      const { x, y, z } = sceneState.jet;
+      state.chase.set(VANTAGE[0] - x, VANTAGE[1] - y, VANTAGE[2] - z).setLength(FOLLOW_DISTANCE).add(state.jetPos.set(x, y, z));
+      stop.position = stop.position.map((v, k) => v + (state.chase.getComponent(k) - v) * pull) as [number, number, number];
+      stop.target = stop.target.map((v, k) => v + (state.jetPos.getComponent(k) - v) * pull) as [number, number, number];
     }
     const reduce = sceneState.reducedMotion;
-    const follow = reduce ? 1 : Math.min(1, dt * 4);
+    // Track a little tighter while following the jet, so it stays near the middle of the frame.
+    const follow = reduce ? 1 : Math.min(1, dt * (4 + 4 * pull));
 
     const p = sceneState.pointer;
     state.smooth.x += (p.x - state.smooth.x) * (reduce ? 1 : 0.05);

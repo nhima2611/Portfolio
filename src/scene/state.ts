@@ -1,7 +1,8 @@
 import type { SectionId } from './config';
+import { SHOW_LENGTH } from './flight';
 
 /** Anything on the desk that reacts to the pointer: a section link, or one of the toys. */
-export type HoverTarget = SectionId | 'lamp' | 'jet';
+export type HoverTarget = SectionId | 'lamp' | 'jet' | 'headphones' | 'duck' | 'cat';
 
 /**
  * Mutable, non-React state read inside useFrame.
@@ -15,6 +16,8 @@ export const sceneState = {
   reducedMotion: false,
   /** Object under the pointer, or null */
   hover: null as HoverTarget | null,
+  /** Where the model jet is right now (the airshow camera follows it). */
+  jet: { x: 0, y: 0, z: 0 },
 };
 
 export const INTRO_LEN = 3.4;
@@ -74,8 +77,8 @@ export function lampSwitch(now = performance.now()): number {
   return SWITCH_ON[Math.min(SWITCH_ON.length - 1, Math.floor(e / 0.07))];
 }
 
-/* Model jet flight (click the jet at its stop, the Launch button, or `jet` in the terminal). */
-export const FLIGHT_LEN = 7;
+/* Model jet airshow (click the jet at its stop, the Launch button, or `jet` in the terminal). */
+export const FLIGHT_LEN = SHOW_LENGTH;
 let jetLaunchedAt = -Infinity;
 
 /** Starts a flight unless one is already running or motion is reduced. Returns whether it launched. */

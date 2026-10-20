@@ -7,7 +7,7 @@ import { isIntroDone, sceneState, type HoverTarget } from './state';
  */
 const level: Partial<Record<HoverTarget, number>> = {};
 
-const HINT_ORDER: HoverTarget[] = ['about', 'experience', 'contact', 'toolkit', 'jet', 'lamp'];
+const HINT_ORDER: HoverTarget[] = ['about', 'experience', 'contact', 'toolkit', 'jet', 'lamp', 'headphones'];
 const HINT_STEP = 0.35;
 const HINT_LEN = 0.7;
 const touch = typeof window !== 'undefined' && window.matchMedia('(hover: none)').matches;
@@ -23,7 +23,7 @@ function hint(target: HoverTarget, since: number): number {
 }
 
 let introEndedAt: number | null = null;
-const TARGETS: HoverTarget[] = ['about', 'experience', 'toolkit', 'contact', 'lamp', 'jet'];
+const TARGETS: HoverTarget[] = ['about', 'experience', 'toolkit', 'off-duty', 'contact', 'lamp', 'jet', 'headphones', 'duck', 'cat'];
 
 /** Mount once in the scene: advances every highlight level each frame. */
 export function HoverDriver() {

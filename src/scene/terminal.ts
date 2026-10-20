@@ -39,6 +39,12 @@ export const terminal = {
   pressed: new Map<number, number>(),
 };
 
+/** Prints lines without a command, e.g. when something on the desk is clicked. */
+export function say(lines: Line[]) {
+  terminal.lines = [...terminal.lines, ...lines].slice(-60);
+  terminal.version++;
+}
+
 export function setTerminalInput(value: string) {
   terminal.input = value;
   terminal.version++;
@@ -70,7 +76,7 @@ function respond(cmd: string, args: string): Line[] | 'clear' {
     case 'launch':
       if (sceneState.reducedMotion) return [[DIM, 'reduced motion is on; the jet stays parked']];
       if (!launchJetWithSound()) return [[DIM, 'already airborne']];
-      return [[WARN, '✈ cleared for takeoff']];
+      return [[WARN, '✈ cleared for takeoff'], [DIM, 'watch for the falling leaf']];
     case 'date':
       return [[TEXT, new Date().toLocaleString('en-GB', { timeZone: profile.timeZone, dateStyle: 'medium', timeStyle: 'short' })]];
     case 'sudo':
