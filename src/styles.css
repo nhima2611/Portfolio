@@ -126,6 +126,10 @@ h2 { font-family: var(--display); font-weight: 700; font-size: clamp(1.7rem, 3.2
 .panel { transition: opacity 0.5s; }
 .in-flight .panel { opacity: 0.12; }
 
+.credits { position: relative; padding-block: 0 20px; pointer-events: auto; }
+.credits p { display: inline-block; margin: 0; padding: 6px 10px; border-radius: 8px; background: var(--panel); backdrop-filter: blur(8px); font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.credits a { color: var(--fg); text-underline-offset: 2px; }
+
 /* Laptop terminal input */
 .term { margin-top: 18px; }
 .term label { display: block; margin-bottom: 6px; }

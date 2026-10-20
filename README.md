@@ -50,16 +50,21 @@ src/
 - **Performance:** `dpr` tối đa 1.75, bàn phím 60 phím dùng `InstancedMesh` (1 draw call), chỉ đèn bàn đổ bóng, three.js tách chunk riêng để cache lâu.
 - **Lights** dùng đơn vị vật lý (three r155+). Nếu thấy cảnh quá tối hoặc quá sáng trên màn hình của bạn, chỉnh `LIGHTS` trong `config.ts`.
 
-## Thay mô hình bằng GLB thật
+## Model máy bay
 
-1. `npm i @react-three/drei`
-2. Đặt file vào `public/models/…` (nén trước: `npx @gltf-transform/cli optimize in.glb out.glb --compress meshopt`)
-3. Trong component tương ứng (ví dụ `ModelJet.tsx`):
-   ```tsx
-   const { scene } = useGLTF('/models/jet.glb');
-   return <primitive object={scene} scale={0.05} />;
-   ```
-   Nhớ ghi credit và license của model ở footer.
+`public/models/su57.glb`: Su-57 Felon của [bohmerang](https://sketchfab.com/bohmerang), license **CC BY-NC-SA 4.0** (không dùng thương mại, bản chỉnh sửa phải giữ cùng license, phải ghi credit; credit nằm ở footer). Đã nén từ bản Sketchfab 23MB:
+
+```bash
+npx @gltf-transform/cli optimize in.glb public/models/su57.glb --compress meshopt --texture-compress webp --texture-size 1024 --simplify false --join false --flatten false
+```
+
+Giữ `--join false --flatten false` để còn tách được node `SU57-landingOn*` / `SU57-landingOff*` (thả/thu bánh khi bay). Jet low-poly trong `geometry.ts` là fallback trong lúc GLB tải.
+
+## Thay mô hình bằng GLB khác
+
+1. Đặt file vào `public/models/…` (nén trước: `npx @gltf-transform/cli optimize in.glb out.glb --compress meshopt`)
+2. Đổi `MODEL_URL` trong `ModelJet.tsx`; model tự căn giữa và co về dài `LENGTH`. Nếu mũi quay sai hướng, chỉnh `NOSE_YAW`.
+3. Nhớ cập nhật credit và license ở footer (`Sections.tsx`).
 
 ## Deploy
 

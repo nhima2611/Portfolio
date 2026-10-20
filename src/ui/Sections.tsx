@@ -161,7 +161,7 @@ export function Sections() {
       <Stop id="off-duty" index={4}>
         <p className="where">top shelf · off duty</p>
         <h2>Off duty, I look up.</h2>
-        <p>The model on the top shelf is a nod to my other interest: fighter jets, especially twin-engine air-superiority designs. Both worlds reward the same things: tight engineering and systems that hold up under load.</p>
+        <p>The Su-57 on the top shelf is a nod to my other interest: fighter jets, especially twin-engine air-superiority designs. Both worlds reward the same things: tight engineering and systems that hold up under load.</p>
         <LaunchButton />
       </Stop>
 
@@ -171,6 +171,17 @@ export function Sections() {
         <p>I'm interested in engineering roles where I can contribute to both the implementation and the architecture.</p>
         <CopyEmail />
       </Stop>
+
+      <footer className="credits">
+        <div className="wrap">
+          <p>
+            Su-57 Felon model by{' '}
+            <a href="https://sketchfab.com/bohmerang" target="_blank" rel="noopener noreferrer">bohmerang</a>,{' '}
+            <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener noreferrer">CC BY-NC-SA 4.0</a>,
+            compressed for the web with textures resized to 1K (<a href="https://sketchfab.com/3d-models/sukhoi-su-57-felon-fighter-jet-free-59995d6f34ba4bb7990195be3a745fc5" target="_blank" rel="noopener noreferrer">source</a>).
+          </p>
+        </div>
+      </footer>
     </>
   );
 }
