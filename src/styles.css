@@ -54,6 +54,32 @@ nav.stops a {
   border: 1px solid var(--line); border-radius: 50%; background: rgba(18, 21, 29, 0.6);
 }
 nav.stops a.on { color: var(--room); background: var(--lamp); border-color: var(--lamp); }
+nav.stops a,
+nav.stops .sound { position: relative; }
+nav.stops .sound {
+  width: 30px; height: 30px; display: grid; place-items: center; margin-left: 6px; padding: 0;
+  color: var(--muted); border: 1px solid var(--line); border-radius: 50%; background: rgba(18, 21, 29, 0.6); cursor: pointer;
+}
+nav.stops .sound[aria-pressed='true'] { color: var(--lamp); border-color: var(--lamp); }
+/* Section name under each nav dot on hover / keyboard focus */
+nav.stops [data-label]::after {
+  content: attr(data-label);
+  position: absolute; top: calc(100% + 8px); left: 50%; transform: translate(-50%, -4px);
+  font: 400 11px var(--mono); color: var(--fg); white-space: nowrap;
+  padding: 3px 8px; border-radius: 6px; background: var(--panel); border: 1px solid var(--line);
+  opacity: 0; pointer-events: none; transition: opacity 0.15s, transform 0.15s;
+}
+nav.stops [data-label]:hover::after,
+nav.stops [data-label]:focus-visible::after { opacity: 1; transform: translate(-50%, 0); }
+
+/* Label that follows the pointer over clickable desk objects */
+.hover-tag {
+  position: fixed; top: 0; left: 0; z-index: 6; pointer-events: none;
+  font: 500 12px var(--mono); color: var(--room); background: var(--lamp);
+  padding: 4px 9px; border-radius: 999px; white-space: nowrap;
+  opacity: 0; transition: opacity 0.12s;
+}
+.hover-tag.on { opacity: 1; }
 
 /* Stops */
 section.stop { min-height: 100vh; display: flex; align-items: center; padding-block: 96px; }
@@ -66,6 +92,8 @@ h2 { font-family: var(--display); font-weight: 700; font-size: clamp(1.7rem, 3.2
 .panel p { color: var(--muted); margin: 0 0 14px; }
 .panel p:last-child { margin-bottom: 0; }
 .hero .panel { background: transparent; border: 0; backdrop-filter: none; padding: 0; max-width: 520px; }
+/* The hero has no panel background, so let clicks reach the desk behind its text (links and buttons stay clickable) */
+.page .hero .panel { pointer-events: none; }
 .hero .lede { font-size: 18px; color: var(--fg); opacity: 0.85; }
 .hint { font-family: var(--mono); font-size: 12px; color: var(--muted); }
 
@@ -94,6 +122,30 @@ h2 { font-family: var(--display); font-weight: 700; font-size: clamp(1.7rem, 3.2
 .mail { font-family: var(--mono); font-size: 15px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; text-decoration: none; overflow-wrap: anywhere; }
 .copied { font-family: var(--mono); font-size: 12px; color: var(--lamp); min-height: 1em; }
 
+/* While the jet laps the room, step the panels back so the whole flight is visible */
+.panel { transition: opacity 0.5s; }
+.in-flight .panel { opacity: 0.12; }
+
+/* Laptop terminal input */
+.term { margin-top: 18px; }
+.term label { display: block; margin-bottom: 6px; }
+.term code { color: var(--lamp); }
+.term-row {
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--mono); font-size: 14px; padding: 9px 12px;
+  background: #0b0e14; border: 1px solid var(--line); border-radius: 10px;
+}
+.term-row:focus-within { border-color: var(--lamp); }
+.term-row span { color: var(--screen); }
+.term-row input {
+  flex: 1; min-width: 0; font: inherit; font-size: 16px; color: var(--fg);
+  background: transparent; border: 0; outline: 0; padding: 0; caret-color: var(--lamp);
+}
+.term-row input::placeholder { color: #4a5163; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.panel .row + .row,
+.panel p + .row { margin-top: 4px; }
+
 /* Intro: hero lines rise in after the lamp turns on; they start partly visible so the first frame is never empty */
 @keyframes rise {
   from { opacity: 0.35; transform: translateY(14px); }
@@ -104,13 +156,24 @@ h2 { font-family: var(--display); font-weight: 700; font-size: clamp(1.7rem, 3.2
 .hero .panel > :nth-child(2) { animation-delay: 1.45s; }
 .hero .panel > :nth-child(3) { animation-delay: 1.6s; }
 .hero .panel > :nth-child(4) { animation-delay: 1.75s; }
+/* Hold the hero until the scene's first frame is up (see App onCreated) */
+html:not(.booted) .hero .panel > * { animation-play-state: paused; }
 
 @media (max-width: 860px) {
   section.stop { align-items: flex-end; padding-block: 72px 32px; }
   section.stop.right .wrap { justify-content: flex-start; }
   .panel { max-width: none; width: 100%; padding: 20px; }
   .hero .panel { background: var(--panel); border: 1px solid var(--line); backdrop-filter: blur(8px); padding: 20px; }
-  nav.stops a { width: 26px; height: 26px; }
+  .page .hero .panel { pointer-events: auto; }
+  nav.stops a,
+  nav.stops .sound { width: 26px; height: 26px; }
+  nav.stops { gap: 4px; }
+  nav.stops [data-label]::after { display: none; }
+  .panel h2 { font-size: 1.5rem; }
+  .shelf-groups { gap: 8px; }
+  .chips { gap: 4px; }
+  .chips span { font-size: 12px; padding: 2px 8px; }
+  .panel .edu { margin-top: 10px; font-size: 13px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

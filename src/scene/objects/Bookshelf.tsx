@@ -3,9 +3,10 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { toolkit } from '../../content/profile';
 import { LIGHTS } from '../config';
+import { hoverAmount } from '../hover';
 import { linkTo } from '../interaction';
 import { drawSpine } from '../screens';
-import { introElapsed, introPower } from '../state';
+import { introElapsed, introPower, sceneState } from '../state';
 
 const SHELF_X: [number, number] = [0.94, 1.62];
 const LOWER_SHELF_TOP = 1.3925;
@@ -52,15 +53,42 @@ function Book({ book }: { book: BookLayout }) {
     document.fonts?.ready.then(paint);
     const cover = new THREE.MeshStandardMaterial({ color: book.color, roughness: 0.8 });
     const pages = new THREE.MeshStandardMaterial({ color: '#e9e2d0', roughness: 0.9 });
-    const spine = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.75 });
+    const spine = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.75, emissive: book.color, emissiveIntensity: 0 });
     // BoxGeometry face order: +x, -x, +y, -y, +z (spine, facing the room), -z
     return [cover, cover, pages, pages, spine, cover];
   }, [book.name, book.color]);
 
   useEffect(() => () => materials.forEach((m) => m.dispose()), [materials]);
 
+  // The whole row glows when any book is hovered; the book under the pointer also slides out a little.
+  const mesh = useRef<THREE.Mesh>(null);
+  const mine = useRef(false);
+  const out = useRef(0);
+  const link = linkTo('toolkit');
+  useFrame((_, delta) => {
+    const k = sceneState.reducedMotion ? 1 : Math.min(1, delta * 12);
+    out.current += ((mine.current ? 1 : 0) - out.current) * k;
+    if (mesh.current) mesh.current.position.z = -0.38 + out.current * 0.035;
+    (materials[4] as THREE.MeshStandardMaterial).emissiveIntensity = 0.25 * hoverAmount('toolkit');
+  });
+
   return (
-    <mesh position={[book.x, LOWER_SHELF_TOP + book.h / 2, -0.38]} material={materials} castShadow receiveShadow {...linkTo('toolkit')}>
+    <mesh
+      ref={mesh}
+      position={[book.x, LOWER_SHELF_TOP + book.h / 2, -0.38]}
+      material={materials}
+      castShadow
+      receiveShadow
+      onClick={link.onClick}
+      onPointerOver={(e) => {
+        link.onPointerOver(e);
+        mine.current = true;
+      }}
+      onPointerOut={() => {
+        link.onPointerOut();
+        mine.current = false;
+      }}
+    >
       <boxGeometry args={[book.w, book.h, 0.16]} />
     </mesh>
   );

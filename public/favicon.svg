@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <radialGradient id="glow" cx="16" cy="15" r="15" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffb46b" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#ffb46b" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="32" height="32" rx="7" fill="#12151d"/>
+  <path d="M6 28 L12 14 H20 L26 28 Z" fill="url(#glow)"/>
+  <path d="M10.5 14 L13 6 H19 L21.5 14 Z" fill="#ffb46b"/>
+  <circle cx="16" cy="14.5" r="2" fill="#fff3e2"/>
+  <rect x="7" y="25" width="18" height="2" rx="1" fill="#ffb46b" opacity="0.8"/>
+</svg>

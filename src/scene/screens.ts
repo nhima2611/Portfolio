@@ -1,5 +1,6 @@
 import { experience, profile } from '../content/profile';
-import { formatPeriod, monthsSince } from '../lib/date';
+import { formatPeriod } from '../lib/date';
+import { terminal } from './terminal';
 import { roundRect } from './useCanvasTexture';
 
 const MONO = '"JetBrains Mono", ui-monospace, monospace';
@@ -31,7 +32,16 @@ function editorLines(): Token[][] {
   return lines;
 }
 
-export function drawEditor(ctx: CanvasRenderingContext2D, W: number, H: number, cursor: boolean) {
+let totalChars = 0;
+
+/** Number of characters in the editor, so the monitor knows when typing is finished. */
+export function editorLength(): number {
+  if (!totalChars) totalChars = editorLines().reduce((n, line) => n + line.reduce((m, [, t]) => m + t.length, 0), 0);
+  return totalChars;
+}
+
+/** Draws the editor; `chars` limits how much has been "typed" so far (Infinity = all of it). */
+export function drawEditor(ctx: CanvasRenderingContext2D, W: number, H: number, cursor: boolean, chars = Infinity) {
   ctx.fillStyle = '#0f1420';
   ctx.fillRect(0, 0, W, H);
   ctx.fillStyle = '#161c2b';
@@ -49,52 +59,60 @@ export function drawEditor(ctx: CanvasRenderingContext2D, W: number, H: number, 
   const lines = editorLines();
   const lineH = Math.min(35, (H - 70) / lines.length);
   ctx.font = `400 ${Math.round(lineH * 0.6)}px ${MONO}`;
-  lines.forEach((tokens, i) => {
+  const typing = chars < editorLength();
+  let budget = chars;
+  for (let i = 0; i < lines.length; i++) {
     const y = 72 + i * lineH;
     let x = 70;
     ctx.fillStyle = '#3a4357';
     ctx.textAlign = 'right';
     ctx.fillText(String(i + 1), 46, y);
     ctx.textAlign = 'left';
-    for (const [color, text] of tokens) {
+    for (const [color, text] of lines[i]) {
+      const shown = text.slice(0, Math.max(0, budget));
+      budget -= text.length;
       ctx.fillStyle = color;
-      ctx.fillText(text, x, y);
-      x += ctx.measureText(text).width;
+      ctx.fillText(shown, x, y);
+      x += ctx.measureText(shown).width;
+      if (budget <= 0) break;
     }
-    if (i === lines.length - 1 && cursor) {
+    const last = typing ? budget <= 0 : i === lines.length - 1;
+    if (last && (cursor || typing)) {
       ctx.fillStyle = CURSOR;
       ctx.fillRect(x + 3, y - lineH * 0.52, lineH * 0.28, lineH * 0.66);
     }
-  });
+    if (typing && budget <= 0) break;
+  }
 }
 
+const TERM_LINE = 40;
+const TERM_ROWS = 12;
+
+/** Terminal history from `terminal.ts`, newest at the bottom, with the live prompt last. */
 export function drawTerminal(ctx: CanvasRenderingContext2D, W: number, H: number, cursor: boolean) {
   ctx.fillStyle = '#0b0e14';
   ctx.fillRect(0, 0, W, H);
   ctx.font = `400 22px ${MONO}`;
-  const years = (monthsSince(profile.startedAt.year, profile.startedAt.month) / 12).toFixed(1);
-  const lines: [string, string][] = [
-    ['#7cc7ff', '$ whoami'],
-    ['#eceae4', profile.name],
-    ['#9aa0ad', `${profile.title} · HCMC`],
-    ['', ''],
-    ['#7cc7ff', '$ cat focus.txt'],
-    ...profile.focus.map((f): [string, string] => ['#eceae4', f]),
-    ['', ''],
-    ['#7cc7ff', '$ uptime'],
-    ['#c3e88d', `${years} years building for the web`],
-    ['#7cc7ff', '$ '],
-  ];
-  lines.forEach(([color, text], i) => {
+  const rows = Math.min(TERM_ROWS, Math.floor((H - 24) / TERM_LINE));
+  const history = terminal.lines.slice(-(rows - 1));
+  history.forEach(([color, text], i) => {
     if (!text) return;
     ctx.fillStyle = color;
-    ctx.fillText(text, 28, 48 + i * 40);
+    ctx.fillText(text, 28, 48 + i * TERM_LINE, W - 56);
   });
+
+  const y = 48 + history.length * TERM_LINE;
+  const prompt = '$ ';
+  const maxChars = Math.floor((W - 90) / ctx.measureText('m').width) - prompt.length;
+  const input = terminal.input.length > maxChars ? '…' + terminal.input.slice(-(maxChars - 1)) : terminal.input;
+  ctx.fillStyle = '#7cc7ff';
+  ctx.fillText(prompt, 28, y);
+  ctx.fillStyle = '#eceae4';
+  ctx.fillText(input, 28 + ctx.measureText(prompt).width, y);
   if (cursor) {
     ctx.fillStyle = CURSOR;
-    ctx.fillRect(60, 48 + (lines.length - 1) * 40 - 20, 12, 26);
+    ctx.fillRect(28 + ctx.measureText(prompt + input).width + 2, y - 20, 12, 26);
   }
-  void H;
 }
 
 export function drawPhone(ctx: CanvasRenderingContext2D, W: number, H: number) {

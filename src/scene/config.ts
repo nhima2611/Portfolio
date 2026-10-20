@@ -35,8 +35,23 @@ export const STOPS: CameraStop[] = [
 
 export const INTRO_CAMERA: [number, number, number] = [3.3, 2.35, 3.9];
 
+/** Wide shot the camera pulls back to while the model jet laps the room. */
+export const FLIGHT_CAMERA: Pick<CameraStop, 'position' | 'target'> = { position: [2.6, 2.25, 2.9], target: [0.4, 1.9, 0] };
+
 /** Section ids, used by click-to-scroll on objects. */
 export const SECTION_IDS = ['intro', 'about', 'experience', 'toolkit', 'off-duty', 'contact'] as const;
 export type SectionId = (typeof SECTION_IDS)[number];
+
+export const SECTION_LABELS: Record<SectionId, string> = {
+  intro: 'Intro',
+  about: 'About',
+  experience: 'Experience',
+  toolkit: 'Toolkit',
+  'off-duty': 'Off duty',
+  contact: 'Contact',
+};
+
+/** Stop index of the model jet; clicking the jet launches it when the camera is already there. */
+export const JET_STOP = SECTION_IDS.indexOf('off-duty');
 
 export const DESK_TOP = 0.775;

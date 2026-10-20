@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import type * as THREE from 'three';
 import { DESK_TOP } from '../config';
 import { createSlab } from '../geometry';
+import { hoverAmount } from '../hover';
 import { linkTo } from '../interaction';
 import { drawPhone } from '../screens';
 import { introElapsed, introPower } from '../state';
@@ -20,7 +21,7 @@ export function Phone() {
 
   const screen = useRef<THREE.MeshBasicMaterial>(null);
   useFrame(() => {
-    screen.current?.color.setScalar(introPower(introElapsed()).phone);
+    screen.current?.color.setScalar(introPower(introElapsed()).phone * (1 + 0.3 * hoverAmount('contact')));
   });
 
   return (

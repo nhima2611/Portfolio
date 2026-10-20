@@ -1,7 +1,11 @@
 import { useState } from 'react';
 import { experience, profile, toolkit } from '../content/profile';
+import { useClock } from '../hooks/useClock';
 import { formatPeriod } from '../lib/date';
 import type { SectionId } from '../scene/config';
+import { launchJetWithSound } from '../scene/interaction';
+import { sceneState } from '../scene/state';
+import { pressKey, runCommand, setTerminalInput } from '../scene/terminal';
 
 function Stop({ id, index, side = 'left', children }: { id: SectionId; index: number; side?: 'left' | 'right'; children: React.ReactNode }) {
   return (
@@ -36,18 +40,78 @@ function CopyEmail() {
   );
 }
 
+/** Types into the 3D laptop's terminal. The reply is mirrored to a live region for screen readers. */
+function TerminalPrompt() {
+  const [value, setValue] = useState('');
+  const [reply, setReply] = useState('');
+  return (
+    <form
+      className="term"
+      onSubmit={(e) => {
+        e.preventDefault();
+        pressKey('Enter');
+        setReply(runCommand(value));
+        setValue('');
+      }}
+    >
+      <label htmlFor="term-input" className="hint">Try the laptop: type <code>help</code></label>
+      <div className="term-row">
+        <span aria-hidden="true">$</span>
+        <input
+          id="term-input"
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+            setTerminalInput(e.target.value);
+          }}
+          onKeyDown={(e) => pressKey(e.key)}
+          autoComplete="off"
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
+          enterKeyHint="send"
+          maxLength={60}
+          placeholder="help"
+        />
+      </div>
+      <p className="sr-only" role="status">{reply}</p>
+    </form>
+  );
+}
+
+function LaunchButton() {
+  const [status, setStatus] = useState('');
+  if (sceneState.reducedMotion) return null;
+  return (
+    <div className="row">
+      <button
+        className="btn"
+        type="button"
+        onClick={() => {
+          setStatus(launchJetWithSound() ? 'Cleared for takeoff' : 'Already airborne');
+          window.setTimeout(() => setStatus(''), 2000);
+        }}
+      >
+        Launch ✈
+      </button>
+      <span className="hint" role="status">{status}</span>
+    </div>
+  );
+}
+
 export function Sections() {
+  const time = useClock(profile.timeZone);
   return (
     <>
       <section className="stop hero" id="intro" data-stop={0}>
         <div className="wrap">
           <div className="panel">
-            <p className="where">{profile.name} · {profile.location} · 23:40</p>
+            <p className="where">{profile.name} · {profile.location} · <time>{time}</time></p>
             <h1>Late nights, clean architecture.</h1>
             <p className="lede">{profile.title} building scalable web applications and the architecture behind them. This is where the work happens.</p>
             <div className="row">
               <a className="btn lamp" href="#about">Take a look around ↓</a>
-              <span className="hint">Tip: click anything on the desk</span>
+              <span className="hint">Tip: everything on the desk is clickable</span>
             </div>
           </div>
         </div>
@@ -58,6 +122,7 @@ export function Sections() {
         <h2>Strong foundations. Room to grow.</h2>
         <p>Good frontend work goes beyond the screen. It makes complex applications easier to build, maintain and evolve.</p>
         <p>I work with React, TypeScript, JavaScript and Node.js, focused on frontend architecture, Micro Frontends and performance. I enjoy hard technical problems and improving the workflows teams use to ship reliable software.</p>
+        <TerminalPrompt />
       </Stop>
 
       <Stop id="experience" index={2}>
@@ -97,6 +162,7 @@ export function Sections() {
         <p className="where">top shelf · off duty</p>
         <h2>Off duty, I look up.</h2>
         <p>The model on the top shelf is a nod to my other interest: fighter jets, especially twin-engine air-superiority designs. Both worlds reward the same things: tight engineering and systems that hold up under load.</p>
+        <LaunchButton />
       </Stop>
 
       <Stop id="contact" index={5}>

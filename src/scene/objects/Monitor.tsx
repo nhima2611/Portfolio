@@ -3,13 +3,19 @@ import { useFrame } from '@react-three/fiber';
 import type * as THREE from 'three';
 import { DESK_TOP } from '../config';
 import { linkTo } from '../interaction';
-import { drawEditor } from '../screens';
+import { hoverAmount } from '../hover';
+import { drawEditor, editorLength } from '../screens';
 import { introElapsed, introPower, sceneState } from '../state';
 import { useBlink, useCanvasTexture } from '../useCanvasTexture';
 
+const STOP = 2;
+const CHARS_PER_SEC = 170;
+
 export function Monitor() {
   const cursor = useRef(true);
-  const { texture, redraw } = useCanvasTexture(1024, 600, (ctx, w, h) => drawEditor(ctx, w, h, cursor.current));
+  /** The editor retypes itself each time the camera arrives at the monitor. */
+  const typing = useRef({ chars: Infinity, start: 0, armed: true });
+  const { texture, redraw } = useCanvasTexture(1024, 600, (ctx, w, h) => drawEditor(ctx, w, h, cursor.current, typing.current.chars));
   const blink = useBlink(600, () => {
     cursor.current = blink.current;
     redraw();
@@ -17,7 +23,25 @@ export function Monitor() {
 
   const screen = useRef<THREE.MeshBasicMaterial>(null);
   useFrame(() => {
-    screen.current?.color.setScalar(introPower(introElapsed()).monitor);
+    screen.current?.color.setScalar(introPower(introElapsed()).monitor * (1 + 0.3 * hoverAmount('experience')));
+
+    if (sceneState.reducedMotion) return;
+    const ty = typing.current;
+    const away = Math.abs(sceneState.progress - STOP);
+    if (away > 1) ty.armed = true;
+    const now = performance.now();
+    if (away < 0.35 && ty.armed) {
+      ty.armed = false;
+      ty.start = now;
+    }
+    if (!ty.start) return;
+    const chars = Math.floor(((now - ty.start) / 1000) * CHARS_PER_SEC);
+    const next = chars >= editorLength() ? Infinity : chars;
+    if (next === Infinity) ty.start = 0;
+    if (next !== ty.chars) {
+      ty.chars = next;
+      redraw();
+    }
   });
 
   return (

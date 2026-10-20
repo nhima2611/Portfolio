@@ -2,13 +2,23 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { COLORS, DESK_TOP, LIGHTS } from '../config';
-import { introElapsed, introPower } from '../state';
+import { blip } from '../../lib/sound';
+import { hoverAmount } from '../hover';
+import { interactive } from '../interaction';
+import { introElapsed, introPower, lampSwitch, toggleLamp } from '../state';
 
-const BULB: [number, number, number] = [-0.505, 1.215, -0.18];
+/** Combined lamp level: intro flicker × the visitor's switch. Dust and the bulb read the same value. */
+export function lampPower(now = performance.now()): number {
+  return introPower(introElapsed(now)).lamp * lampSwitch(now);
+}
+
+export const BULB: [number, number, number] = [-0.505, 1.215, -0.18];
+export const LAMP_TARGET: [number, number, number] = [-0.05, DESK_TOP, 0.1];
 const METAL = { color: '#2b2f3a', roughness: 0.4, metalness: 0.6 } as const;
 
 /** Desk lamp: the key light of the scene, and the star of the intro flicker. */
 export function Lamp() {
+  const shade = useRef<THREE.MeshStandardMaterial>(null);
   const spot = useRef<THREE.SpotLight>(null);
   const glow = useRef<THREE.PointLight>(null);
   const bulb = useRef<THREE.MeshBasicMaterial>(null);
@@ -17,16 +27,17 @@ export function Lamp() {
   const off = useMemo(() => new THREE.Color(COLORS.lampOff), []);
 
   useEffect(() => {
-    target.position.set(-0.05, DESK_TOP, 0.1);
+    target.position.set(...LAMP_TARGET);
     target.updateMatrixWorld();
     if (spot.current) spot.current.target = target;
   }, [target]);
 
   useFrame(() => {
-    const { lamp } = introPower(introElapsed());
+    const lamp = lampPower();
     if (spot.current) spot.current.intensity = LIGHTS.spot * lamp;
     if (glow.current) glow.current.intensity = LIGHTS.lampGlow * lamp;
     bulb.current?.color.copy(off).lerp(on, lamp);
+    if (shade.current) shade.current.emissiveIntensity = 0.35 * hoverAmount('lamp');
   });
 
   return (
@@ -45,11 +56,23 @@ export function Lamp() {
       </mesh>
       <mesh position={[-0.52, 1.25, -0.18]} rotation-z={0.6} castShadow>
         <coneGeometry args={[0.075, 0.12, 20, 1, true]} />
-        <meshStandardMaterial {...METAL} side={THREE.DoubleSide} />
+        <meshStandardMaterial ref={shade} {...METAL} side={THREE.DoubleSide} emissive={COLORS.lamp} emissiveIntensity={0} />
       </mesh>
       <mesh position={BULB}>
         <sphereGeometry args={[0.022, 12, 8]} />
         <meshBasicMaterial ref={bulb} color={COLORS.lampOff} toneMapped={false} />
+      </mesh>
+
+      {/* Invisible hit area around the arm and shade: click to switch the lamp */}
+      <mesh
+        position={[-0.66, 1.1, -0.2]}
+        {...interactive('lamp', () => {
+          toggleLamp();
+          blip('switch');
+        })}
+      >
+        <boxGeometry args={[0.3, 0.4, 0.16]} />
+        <meshBasicMaterial visible={false} />
       </mesh>
 
       <primitive object={target} />

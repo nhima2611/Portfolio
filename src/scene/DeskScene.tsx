@@ -3,7 +3,9 @@ import { useFrame } from '@react-three/fiber';
 import type * as THREE from 'three';
 import { CameraRig } from './CameraRig';
 import { COLORS, LIGHTS } from './config';
+import { HoverDriver } from './hover';
 import { Bookshelf } from './objects/Bookshelf';
+import { Dust } from './objects/Dust';
 import { Lamp } from './objects/Lamp';
 import { Laptop } from './objects/Laptop';
 import { ModelJet } from './objects/ModelJet';
@@ -32,6 +34,7 @@ export function DeskScene() {
 
       <Room />
       <Lamp />
+      <Dust />
       <Monitor />
       <Laptop />
       <Phone />
@@ -39,6 +42,7 @@ export function DeskScene() {
       <Bookshelf />
       <ModelJet />
 
+      <HoverDriver />
       <CameraRig />
     </>
   );

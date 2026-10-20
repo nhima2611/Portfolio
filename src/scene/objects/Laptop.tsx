@@ -3,9 +3,11 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { DESK_TOP } from '../config';
 import { createSlab } from '../geometry';
+import { hoverAmount } from '../hover';
 import { linkTo } from '../interaction';
 import { drawTerminal } from '../screens';
 import { introElapsed, introPower, sceneState } from '../state';
+import { KEY_COLS, KEY_ROWS, SPACE_FROM, SPACE_TO, keyIndex, terminal } from '../terminal';
 import { useBlink, useCanvasTexture } from '../useCanvasTexture';
 
 const ALU = { color: '#4a4e57', roughness: 0.35, metalness: 0.75 } as const;
@@ -28,8 +30,13 @@ export function Laptop() {
   }, !sceneState.reducedMotion);
 
   const screen = useRef<THREE.MeshBasicMaterial>(null);
+  const seen = useRef(terminal.version);
   useFrame(() => {
-    screen.current?.color.setScalar(introPower(introElapsed()).laptop);
+    screen.current?.color.setScalar(introPower(introElapsed()).laptop * (1 + 0.3 * hoverAmount('about')));
+    if (seen.current !== terminal.version) {
+      seen.current = terminal.version;
+      redraw();
+    }
   });
 
   return (
@@ -60,38 +67,59 @@ export function Laptop() {
   );
 }
 
-const COLS = 13;
-const ROWS = 5;
-const SPACE_FROM = 4;
-const SPACE_TO = 8;
+const PRESS_MS = 140;
+const KEY_Y = 0.0118;
+const KEY_TRAVEL = 0.0012;
 
+/** One instance per grid cell; the space bar is the widened first cell of its run, the rest are hidden. */
+function keyTransform(d: THREE.Object3D, r: number, c: number, press = 0) {
+  const space = r === KEY_ROWS - 1 && c >= SPACE_FROM && c <= SPACE_TO;
+  if (space && c !== SPACE_FROM) {
+    d.scale.set(0, 0, 0);
+  } else if (space) {
+    d.position.set(-0.12 + ((SPACE_FROM + SPACE_TO) / 2) * 0.02, KEY_Y - press * KEY_TRAVEL, -0.098 + r * 0.0195);
+    d.scale.set(5.5, 1, 1);
+  } else {
+    d.position.set(-0.12 + c * 0.02, KEY_Y - press * KEY_TRAVEL, -0.098 + r * 0.0195);
+    d.scale.set(1, 1, 1);
+  }
+  d.updateMatrix();
+}
+
+/** Keys dip as the visitor types into the terminal (see pressKey in terminal.ts). */
 function Keyboard() {
   const ref = useRef<THREE.InstancedMesh>(null);
-  const count = COLS * ROWS - (SPACE_TO - SPACE_FROM + 1) + 1;
+  const dummy = useMemo(() => new THREE.Object3D(), []);
 
   useLayoutEffect(() => {
     const mesh = ref.current;
     if (!mesh) return;
-    const d = new THREE.Object3D();
-    let i = 0;
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) {
-        if (r === ROWS - 1 && c >= SPACE_FROM && c <= SPACE_TO) continue;
-        d.position.set(-0.12 + c * 0.02, 0.0118, -0.098 + r * 0.0195);
-        d.scale.set(1, 1, 1);
-        d.updateMatrix();
-        mesh.setMatrixAt(i++, d.matrix);
+    for (let r = 0; r < KEY_ROWS; r++) {
+      for (let c = 0; c < KEY_COLS; c++) {
+        keyTransform(dummy, r, c);
+        mesh.setMatrixAt(keyIndex(r, c), dummy.matrix);
       }
     }
-    d.position.set(0, 0.0118, -0.098 + (ROWS - 1) * 0.0195);
-    d.scale.set(5.5, 1, 1);
-    d.updateMatrix();
-    mesh.setMatrixAt(i, d.matrix);
     mesh.instanceMatrix.needsUpdate = true;
-  }, []);
+  }, [dummy]);
+
+  useFrame(() => {
+    const mesh = ref.current;
+    if (!mesh || terminal.pressed.size === 0) return;
+    const now = performance.now();
+    for (const [i, at] of terminal.pressed) {
+      const age = (now - at) / PRESS_MS;
+      const r = Math.floor(i / KEY_COLS);
+      const c = i % KEY_COLS;
+      keyTransform(dummy, r, c, age >= 1 ? 0 : Math.sin(Math.min(1, age) * Math.PI));
+      mesh.setMatrixAt(i, dummy.matrix);
+      if (age >= 1) terminal.pressed.delete(i);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+  });
 
   return (
-    <instancedMesh ref={ref} args={[undefined, undefined, count]} castShadow>
+    <instancedMesh ref={ref} args={[undefined, undefined, KEY_COLS * KEY_ROWS]} castShadow>
       <boxGeometry args={[0.0175, 0.0018, 0.0165]} />
       <meshStandardMaterial color="#111318" roughness={0.6} />
     </instancedMesh>

@@ -1,26 +1,11 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { DESK_TOP } from '../config';
 import { sceneState } from '../state';
+import { useSoftDot } from '../useCanvasTexture';
 
 const PUFFS = 10;
-
-function useSoftDot() {
-  const tex = useMemo(() => {
-    const c = document.createElement('canvas');
-    c.width = c.height = 64;
-    const g = c.getContext('2d')!;
-    const grd = g.createRadialGradient(32, 32, 2, 32, 32, 32);
-    grd.addColorStop(0, 'rgba(255,255,255,0.6)');
-    grd.addColorStop(1, 'rgba(255,255,255,0)');
-    g.fillStyle = grd;
-    g.fillRect(0, 0, 64, 64);
-    return new THREE.CanvasTexture(c);
-  }, []);
-  useEffect(() => () => tex.dispose(), [tex]);
-  return tex;
-}
 
 export function Mug() {
   const dot = useSoftDot();
