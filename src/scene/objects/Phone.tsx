@@ -25,7 +25,7 @@ export function Phone() {
   });
 
   return (
-    <group position={[0.42, DESK_TOP + 0.004, 0.24]} rotation-y={-0.35}>
+    <group position={[0.55, DESK_TOP + 0.004, 0.07]} rotation-y={-0.35}>
       <mesh geometry={body} castShadow receiveShadow>
         <meshStandardMaterial color="#3d4048" roughness={0.3} metalness={0.85} />
       </mesh>

@@ -5,7 +5,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { blip } from '../../lib/sound';
 import { COLORS } from '../config';
-import { FLARE_SALVOS, MANOEUVRES, MISSILE_AT, PARKED, gearAt, sampleFlight, timeAt, within, type FlightSample } from '../flight';
+import { FLARE_SALVOS, MANOEUVRES, MISSILE_AT, PARKED, gearAt, sampleFlight, timeAt, turnAroundAt, within, type FlightSample } from '../flight';
 import { createJet } from '../geometry';
 import { hoverAmount } from '../hover';
 import { atJetStop, interactive, launchJetWithSound, scrollToSection } from '../interaction';
@@ -234,6 +234,8 @@ export function ModelJet() {
 
     const s = sampleFlight(sec, state.sample);
     const o = manoeuvres(s, state.overlay);
+    // After the roll-out: swing round 180° on the spot, ending in the parked pose (nose to -x).
+    o.yaw += Math.PI * turnAroundAt(sec);
 
     // Heading and climb from the path, banked into turns, then the manoeuvre attitude on top.
     const L = state.look;
@@ -294,6 +296,8 @@ export function ModelJet() {
           </sprite>
         ))}
       </group>
+      {/* Soft warm light over the parking spot, so the jet reads clearly against the desk */}
+      <pointLight position={[PARKED.x + 0.05, PARKED.y + 0.28, PARKED.z + 0.12]} color="#ffd2a1" intensity={0.7} distance={0.7} decay={2} />
       {/* Generous invisible hit area so the jet is easy to click */}
       <mesh position={[PARKED.x, PARKED.y + 0.03, PARKED.z]} {...interactive('jet', () => (atJetStop() ? launchJetWithSound() : scrollToSection('off-duty')))}>
         <sphereGeometry args={[0.13, 8, 6]} />

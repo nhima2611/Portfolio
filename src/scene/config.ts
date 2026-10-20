@@ -29,8 +29,8 @@ export const STOPS: CameraStop[] = [
   { position: [-0.36, 1.02, 0.5], target: [-0.47, 0.88, -0.1], shift: 0.2 }, // laptop
   { position: [0.15, 1.1, 0.6], target: [0.15, 1.08, -0.26], shift: -0.2 }, // monitor
   { position: [0.95, 1.55, 0.75], target: [1.3, 1.5, -0.35], shift: -0.2 }, // bookshelf
-  { position: [1.0, 1.0, 0.95], target: [0.52, 0.83, 0.37], shift: -0.2 }, // model jet, parked on the desk runway
-  { position: [0.36, 1.12, 0.52], target: [0.42, 0.78, 0.22], shift: -0.2 }, // phone
+  { position: [0.42, 1.02, 0.92], target: [0.92, 0.83, 0.33], shift: -0.2 }, // model jet, parked at the right end of the desk runway
+  { position: [0.63, 1.1, 0.34], target: [0.56, 0.78, 0.06], shift: -0.2 }, // phone
 ];
 
 export const INTRO_CAMERA: [number, number, number] = [3.3, 2.35, 3.9];
