@@ -180,6 +180,12 @@ export function Sections() {
             <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener noreferrer">CC BY-NC-SA 4.0</a>,
             compressed for the web with textures resized to 1K (<a href="https://sketchfab.com/3d-models/sukhoi-su-57-felon-fighter-jet-free-59995d6f34ba4bb7990195be3a745fc5" target="_blank" rel="noopener noreferrer">source</a>).
           </p>
+          <p>
+            S-400 Triumf model by{' '}
+            <a href="https://sketchfab.com/42manako" target="_blank" rel="noopener noreferrer">42manako</a>,{' '}
+            <a href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank" rel="noopener noreferrer">CC BY-NC 4.0</a>,
+            compressed for the web with textures resized to 1K (<a href="https://sketchfab.com/3d-models/s-400-triumf-sam-system-1a109bdd906149249dce0a18cdfbe708" target="_blank" rel="noopener noreferrer">source</a>).
+          </p>
         </div>
       </footer>
     </>

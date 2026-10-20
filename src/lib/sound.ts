@@ -2,7 +2,7 @@
  * Optional ambience, synthesised with Web Audio so there are no audio files to load.
  * Off by default; nothing is created until the visitor turns it on (browsers require a gesture anyway).
  */
-type Blip = 'key' | 'enter' | 'switch' | 'whoosh' | 'quack' | 'purr';
+type Blip = 'key' | 'enter' | 'switch' | 'whoosh' | 'quack' | 'boom' | 'warning';
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
@@ -79,7 +79,7 @@ export function onSoundChange(fn: (on: boolean) => void): () => void {
   return () => listeners.delete(fn);
 }
 
-const BLIPS: Record<Exclude<Blip, 'quack' | 'purr'>, { freq: number; q: number; len: number; gain: number; rate: number }> = {
+const BLIPS: Record<Exclude<Blip, 'quack' | 'boom' | 'warning'>, { freq: number; q: number; len: number; gain: number; rate: number }> = {
   key: { freq: 3200, q: 1.2, len: 0.035, gain: 0.5, rate: 6 },
   enter: { freq: 1800, q: 1, len: 0.06, gain: 0.6, rate: 5 },
   switch: { freq: 2400, q: 4, len: 0.05, gain: 0.9, rate: 3 },
@@ -90,7 +90,8 @@ const BLIPS: Record<Exclude<Blip, 'quack' | 'purr'>, { freq: number; q: number; 
 export function blip(kind: Blip): void {
   if (!on || !ctx || !master || !noise) return;
   if (kind === 'quack') return quack(ctx, master);
-  if (kind === 'purr') return purr(ctx, master, noise);
+  if (kind === 'boom') return boom(ctx, master, noise);
+  if (kind === 'warning') return warning(ctx, master);
   const { freq, q, len, gain, rate } = BLIPS[kind];
   const t = ctx.currentTime;
   const src = ctx.createBufferSource();
@@ -136,30 +137,39 @@ function quack(c: AudioContext, out: AudioNode) {
   }
 }
 
-/** Cat: low noise pulsing ~25 times a second for a second and a half. */
-function purr(c: AudioContext, out: AudioNode, buf: AudioBuffer) {
+/** Distant explosion: a low thump that rumbles off. */
+function boom(c: AudioContext, out: AudioNode, buf: AudioBuffer) {
   const t = c.currentTime;
   const src = c.createBufferSource();
   src.buffer = buf;
-  src.playbackRate.value = 0.5;
+  src.playbackRate.value = 0.6;
   const low = c.createBiquadFilter();
   low.type = 'lowpass';
-  low.frequency.value = 260;
-  const amp = c.createGain();
-  amp.gain.value = 0.5;
-  const lfo = c.createOscillator();
-  lfo.frequency.value = 25;
-  const depth = c.createGain();
-  depth.gain.value = 0.5;
-  lfo.connect(depth).connect(amp.gain);
+  low.frequency.setValueAtTime(900, t);
+  low.frequency.exponentialRampToValueAtTime(120, t + 1.2);
   const env = c.createGain();
   env.gain.setValueAtTime(0.0001, t);
-  env.gain.exponentialRampToValueAtTime(1.2, t + 0.25);
-  env.gain.setValueAtTime(1.2, t + 1.1);
+  env.gain.exponentialRampToValueAtTime(1.4, t + 0.02);
   env.gain.exponentialRampToValueAtTime(0.0001, t + 1.6);
-  src.connect(low).connect(amp).connect(env).connect(out);
+  src.connect(low).connect(env).connect(out);
   src.start(t, Math.random() * 2);
-  lfo.start(t);
   src.stop(t + 1.7);
-  lfo.stop(t + 1.7);
+}
+
+/** Missile warning: four quick high beeps, like a radar warning receiver. */
+function warning(c: AudioContext, out: AudioNode) {
+  for (let i = 0; i < 4; i++) {
+    const t = c.currentTime + i * 0.16;
+    const osc = c.createOscillator();
+    osc.type = 'square';
+    osc.frequency.value = 1250;
+    const env = c.createGain();
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.exponentialRampToValueAtTime(0.12, t + 0.01);
+    env.gain.setValueAtTime(0.12, t + 0.08);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + 0.1);
+    osc.connect(env).connect(out);
+    osc.start(t);
+    osc.stop(t + 0.12);
+  }
 }

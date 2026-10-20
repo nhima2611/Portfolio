@@ -2,7 +2,7 @@ import type { SectionId } from './config';
 import { SHOW_LENGTH } from './flight';
 
 /** Anything on the desk that reacts to the pointer: a section link, or one of the toys. */
-export type HoverTarget = SectionId | 'lamp' | 'jet' | 'headphones' | 'duck' | 'cat';
+export type HoverTarget = SectionId | 'lamp' | 'jet' | 'headphones' | 'duck' | 'launcher';
 
 /**
  * Mutable, non-React state read inside useFrame.
@@ -82,9 +82,9 @@ export const FLIGHT_LEN = SHOW_LENGTH;
 let jetLaunchedAt = -Infinity;
 
 /** Starts a flight unless one is already running or motion is reduced. Returns whether it launched. */
-export function launchJet(): boolean {
+export function launchJet(startAt = 0): boolean {
   if (sceneState.reducedMotion || jetFlight() !== null) return false;
-  jetLaunchedAt = performance.now();
+  jetLaunchedAt = performance.now() - startAt * 1000;
   return true;
 }
 

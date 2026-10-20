@@ -28,7 +28,7 @@ export const STOPS: CameraStop[] = [
   { position: [2.05, 1.8, 2.35], target: [0.12, 0.98, -0.05], shift: -0.12 }, // intro
   { position: [-0.36, 1.02, 0.5], target: [-0.47, 0.88, -0.1], shift: 0.2 }, // laptop
   { position: [0.15, 1.1, 0.6], target: [0.15, 1.08, -0.26], shift: -0.2 }, // monitor
-  { position: [0.95, 1.55, 0.75], target: [1.3, 1.5, -0.35], shift: -0.2 }, // bookshelf
+  { position: [0.95, 1.62, 0.8], target: [1.3, 1.58, -0.35], shift: -0.2 }, // bookshelf (both shelves, launcher on top)
   { position: [0.42, 1.02, 0.92], target: [0.92, 0.83, 0.33], shift: -0.2 }, // model jet, parked at the right end of the desk runway
   { position: [0.63, 1.1, 0.34], target: [0.56, 0.78, 0.06], shift: -0.2 }, // phone
 ];
@@ -36,10 +36,10 @@ export const STOPS: CameraStop[] = [
 export const INTRO_CAMERA: [number, number, number] = [3.3, 2.35, 3.9];
 
 /**
- * Airshow camera: one steady wide shot framing the whole flight area (window to chair, desk to ceiling).
+ * Airshow camera: one steady wide shot framing the whole flight area (left wall to the base turn on the right, desk to ceiling).
  * It only leans SHOW_TRACKING of the way toward the jet, so the frame stays calm while still feeling alive.
  */
-export const SHOW_CAMERA: Pick<CameraStop, 'position' | 'target'> = { position: [0.4, 1.95, 4.3], target: [0.35, 1.38, 0.45] };
+export const SHOW_CAMERA: Pick<CameraStop, 'position' | 'target'> = { position: [0.75, 1.95, 4.6], target: [0.6, 1.35, 0.5] };
 export const SHOW_TRACKING = 0.2;
 
 /** Section ids, used by click-to-scroll on objects. */

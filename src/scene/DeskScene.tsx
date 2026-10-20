@@ -7,7 +7,8 @@ import { HoverDriver } from './hover';
 import { BiasLights } from './objects/BiasLights';
 import { Bookshelf } from './objects/Bookshelf';
 import { Chair } from './objects/Chair';
-import { Cat, Duck } from './objects/Critters';
+import { Duck } from './objects/Critters';
+import { ShelfDisplay } from './objects/ShelfDisplay';
 import { Dust } from './objects/Dust';
 import { FlightFX } from './objects/FlightFX';
 import { Lamp } from './objects/Lamp';
@@ -59,7 +60,7 @@ export function DeskScene() {
       <Mouse />
       <Headphones />
       <Duck />
-      <Cat />
+      <ShelfDisplay />
       <Chair />
 
       <HoverDriver />

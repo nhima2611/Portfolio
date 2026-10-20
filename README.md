@@ -60,6 +60,8 @@ npx @gltf-transform/cli optimize in.glb public/models/su57.glb --compress meshop
 
 Giữ `--join false --flatten false` để còn tách được node `SU57-landingOn*` / `SU57-landingOff*` (thả/thu bánh khi bay). Jet low-poly trong `geometry.ts` là fallback trong lúc GLB tải.
 
+`public/models/s400.glb`: S-400 Triumf của [42manako](https://sketchfab.com/42manako), license **CC BY-NC 4.0** (phải ghi credit, không dùng thương mại; credit ở footer). Nén cùng lệnh như trên, giữ node `SM_S400_*_Rockets` (cụm ống phóng) để dựng lên khi bấm. Bản gốc của cả hai model nằm ở `../assets-source/` kèm `LICENSE.txt`.
+
 ## Airshow
 
 Bấm Launch (hoặc gõ `jet` trong terminal): Su-57 cất cánh từ mép trước của bàn, bay vòng, lăn thùng, thả pháo sáng, bắn tên lửa ra cửa sổ, rắn hổ mang, Kulbit, lá vàng rơi rồi hạ cánh lại đúng chỗ đậu.

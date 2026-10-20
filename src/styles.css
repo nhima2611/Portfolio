@@ -16,7 +16,8 @@
 *,
 *::before,
 *::after { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
+/* Nav and object links jump instantly; the camera itself glides between stops (see scrollToSection). */
+html { scroll-behavior: auto; }
 body {
   margin: 0;
   background: var(--room);
@@ -127,6 +128,7 @@ h2 { font-family: var(--display); font-weight: 700; font-size: clamp(1.7rem, 3.2
 .in-flight .panel { opacity: 0.12; }
 
 .credits { position: relative; padding-block: 0 20px; pointer-events: auto; }
+.credits .wrap { display: grid; gap: 6px; justify-items: start; }
 .credits p { display: inline-block; margin: 0; padding: 6px 10px; border-radius: 8px; background: var(--panel); backdrop-filter: blur(8px); font-family: var(--mono); font-size: 11px; color: var(--muted); }
 .credits a { color: var(--fg); text-underline-offset: 2px; }
 
@@ -181,6 +183,5 @@ html:not(.booted) .hero .panel > * { animation-play-state: paused; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html { scroll-behavior: auto; }
   .hero .panel > * { animation: none; }
 }

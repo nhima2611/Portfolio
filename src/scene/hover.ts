@@ -23,7 +23,7 @@ function hint(target: HoverTarget, since: number): number {
 }
 
 let introEndedAt: number | null = null;
-const TARGETS: HoverTarget[] = ['about', 'experience', 'toolkit', 'off-duty', 'contact', 'lamp', 'jet', 'headphones', 'duck', 'cat'];
+const TARGETS: HoverTarget[] = ['about', 'experience', 'toolkit', 'off-duty', 'contact', 'lamp', 'jet', 'headphones', 'duck', 'launcher'];
 
 /** Mount once in the scene: advances every highlight level each frame. */
 export function HoverDriver() {

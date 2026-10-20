@@ -5,12 +5,12 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { blip } from '../../lib/sound';
 import { COLORS } from '../config';
-import { FLARE_SALVOS, MANOEUVRES, MISSILE_AT, PARKED, gearAt, sampleFlight, timeAt, turnAroundAt, within, type FlightSample } from '../flight';
+import { DEFENSIVE_FLARES, FLARE_SALVOS, MANOEUVRES, MISSILE_SALVO, PARKED, THREAT_AT, THREAT_FROM, cameraPullAt, gearAt, groundOpsAt, sampleFlight, timeAt, within, type FlightSample } from '../flight';
 import { createJet } from '../geometry';
 import { hoverAmount } from '../hover';
 import { atJetStop, interactive, launchJetWithSound, scrollToSection } from '../interaction';
 import { FLIGHT_LEN, jetFlight, sceneState } from '../state';
-import { fireFlares, fireMissile } from './FlightFX';
+import { fireFlares, fireMissile, launchThreat } from './FlightFX';
 
 /** Parked at the right end of the desk runway, nose to -x, standing on its own gear (the pivot is at wheel level). */
 const REST = new THREE.Euler(0, Math.PI / 2, 0);
@@ -54,6 +54,8 @@ function manoeuvres(s: FlightSample, o: Overlay): Overlay {
     o.up += 0.08 * Math.sin(phi);
     o.left += 0.08 * (1 - Math.cos(phi));
   }
+  // Drill: a steep climb with two full rolls, the way display pilots fire flares on the way up.
+  if ((m = within(MANOEUVRES.drill, s.wp)) >= 0) o.roll += Math.PI * 4 * easeInOutSine(m);
   // Pugachev's cobra: pitch past vertical and back with almost no change of path.
   if ((m = within(MANOEUVRES.cobra, s.wp)) >= 0) {
     const h = hump(m, 0.35, 0.62);
@@ -198,6 +200,54 @@ const NOZZLES: [number, number, number][] = [
   [0.017, 0.036, 0.128],
 ];
 
+/**
+ * Searchlight that follows the jet through the show: mounted high at the front of the room, a narrow soft beam,
+ * on only while the camera holds the wide shot. Flares, smoke and missile flames are self-lit, so it never
+ * washes them out; it just keeps the airframe readable against the dark room.
+ */
+const SPOT_FROM: [number, number, number] = [0.6, 3.0, 3.0];
+const SPOT_INTENSITY = 26;
+
+function TrackingSpot() {
+  const spot = useRef<THREE.SpotLight>(null);
+  const target = useMemo(() => new THREE.Object3D(), []);
+  const aim = useMemo(() => new THREE.Vector3(), []);
+  useEffect(() => {
+    if (spot.current) spot.current.target = target;
+  }, [target]);
+  useFrame((_, delta) => {
+    const s = spot.current;
+    if (!s) return;
+    const { x, y, z } = sceneState.jet;
+    // Ease the aim a little, like an operator panning the light.
+    target.position.lerp(aim.set(x, y + 0.02, z), Math.min(1, delta * 10));
+    target.updateMatrixWorld();
+    s.intensity = SPOT_INTENSITY * cameraPullAt(showSeconds());
+  });
+  return (
+    <>
+      <primitive object={target} />
+      <spotLight ref={spot} position={SPOT_FROM} color="#d8e6ff" intensity={0} angle={0.11} penumbra={0.9} decay={2} distance={0} />
+    </>
+  );
+}
+
+/** One click does both: jump to the jet's stop (the camera glides there during the take-off roll) and launch. */
+function launchFromDesk() {
+  if (!atJetStop()) scrollToSection('off-duty');
+  launchJetWithSound();
+}
+
+function setBurners(burners: (THREE.Sprite | null)[], throttle: number) {
+  for (const b of burners) {
+    if (!b) continue;
+    b.visible = throttle > 0.05;
+    const size = 0.01 + 0.018 * throttle * (0.85 + Math.random() * 0.3);
+    b.scale.set(size, size, 1);
+    (b.material as THREE.SpriteMaterial).opacity = throttle;
+  }
+}
+
 /** The Su-57 parked on the desk; Launch sends it through a short airshow and back to the same spot. */
 export function ModelJet() {
   const pivot = useRef<THREE.Group>(null);
@@ -217,8 +267,15 @@ export function ModelJet() {
     }),
     [],
   );
-  const flareTimes = useMemo(() => FLARE_SALVOS.map(timeAt), []);
-  const missileTime = useMemo(() => timeAt(MISSILE_AT), []);
+  const events = useMemo(
+    () => ({
+      flares: [...FLARE_SALVOS, ...DEFENSIVE_FLARES].map(timeAt),
+      missiles: MISSILE_SALVO.map(timeAt),
+      threat: timeAt(THREAT_AT),
+      threatFrom: new THREE.Vector3(...THREAT_FROM),
+    }),
+    [],
+  );
 
   useFrame((_, delta) => {
     const p = pivot.current;
@@ -232,10 +289,24 @@ export function ModelJet() {
       return;
     }
 
+    const k = 1 - Math.exp(-Math.min(delta, 0.05) * 16);
+
+    // After the roll-out: turn round, taxi back and turn into the parking spot.
+    const ops = groundOpsAt(sec);
+    if (ops) {
+      p.position.set(ops.x, PARKED.y, PARKED.z);
+      state.look.rotation.set(0, REST.y + ops.yaw, 0);
+      p.quaternion.slerp(state.look.quaternion, k);
+      setBurners(burners.current, 0.12 * ops.moving);
+      prev.current = sec;
+      sceneState.jet.x = p.position.x;
+      sceneState.jet.y = p.position.y;
+      sceneState.jet.z = p.position.z;
+      return;
+    }
+
     const s = sampleFlight(sec, state.sample);
     const o = manoeuvres(s, state.overlay);
-    // After the roll-out: swing round 180° on the spot, ending in the parked pose (nose to -x).
-    o.yaw += Math.PI * turnAroundAt(sec);
 
     // Heading and climb from the path, banked into turns, then the manoeuvre attitude on top.
     const L = state.look;
@@ -252,32 +323,27 @@ export function ModelJet() {
     // On the ground the nose comes up around the main wheels, not the pivot: lift the pivot to match.
     if (s.position.y < PARKED.y + 0.05 && o.pitch > 0) p.position.y += Math.sin(o.pitch) * 0.07;
     // Ease toward the target attitude; fast enough for a kulbit, smooth enough to hide sampling steps.
-    const k = 1 - Math.exp(-Math.min(delta, 0.05) * 16);
     p.quaternion.slerp(L.quaternion, prev.current === null ? 1 : k);
 
     // Afterburner: brightest while accelerating hard (take-off roll, pulling out of the cobra and kulbit).
-    const throttle = THREE.MathUtils.clamp(0.15 + s.accel * 0.9, 0, 1) * Math.min(1, s.speed * 4);
-    burners.current.forEach((b) => {
-      if (!b) return;
-      b.visible = throttle > 0.05;
-      const size = 0.01 + 0.018 * throttle * (0.85 + Math.random() * 0.3);
-      b.scale.set(size, size, 1);
-      (b.material as THREE.SpriteMaterial).opacity = throttle;
-    });
+    setBurners(burners.current, THREE.MathUtils.clamp(0.15 + s.accel * 0.9, 0, 1) * Math.min(1, s.speed * 4));
 
-    // Timed events: flare salvos and the missile shot, fired once as the show passes them.
-    const last = prev.current ?? -1;
+    // Timed events, each fired once as the show passes it: flare salvos, the missile salvo, the inbound threat.
+    const last = prev.current ?? sec; // joining mid-show (dev scrubbing) must not replay earlier events
+    const passed = (t: number) => last < t && sec >= t;
     state.v.copy(s.tangent).multiplyScalar(s.speed);
-    for (const ft of flareTimes) {
-      if (last < ft && sec >= ft) {
-        fireFlares(state.a.copy(p.position).addScaledVector(s.tangent, -0.09).addScaledVector(state.up, 0.02), state.v, state.right);
-        blip('switch');
-      }
+    for (const t of events.flares) {
+      if (!passed(t)) continue;
+      fireFlares(state.a.copy(p.position).addScaledVector(s.tangent, -0.09).addScaledVector(state.up, 0.02), state.v, state.right);
+      blip('switch');
     }
-    if (last < missileTime && sec >= missileTime) {
-      fireMissile(state.a.copy(p.position).addScaledVector(state.up, 0.005), state.v);
+    events.missiles.forEach((t, i) => {
+      if (!passed(t)) return;
+      // Alternate left and right bays.
+      fireMissile(state.a.copy(p.position).addScaledVector(state.up, 0.005).addScaledVector(state.right, i % 2 ? 0.012 : -0.012), state.v);
       blip('whoosh');
-    }
+    });
+    if (passed(events.threat)) launchThreat(events.threatFrom);
     prev.current = sec;
     sceneState.jet.x = p.position.x;
     sceneState.jet.y = p.position.y;
@@ -296,10 +362,11 @@ export function ModelJet() {
           </sprite>
         ))}
       </group>
+      <TrackingSpot />
       {/* Soft warm light over the parking spot, so the jet reads clearly against the desk */}
       <pointLight position={[PARKED.x + 0.05, PARKED.y + 0.28, PARKED.z + 0.12]} color="#ffd2a1" intensity={0.7} distance={0.7} decay={2} />
       {/* Generous invisible hit area so the jet is easy to click */}
-      <mesh position={[PARKED.x, PARKED.y + 0.03, PARKED.z]} {...interactive('jet', () => (atJetStop() ? launchJetWithSound() : scrollToSection('off-duty')))}>
+      <mesh position={[PARKED.x, PARKED.y + 0.03, PARKED.z]} {...interactive('jet', launchFromDesk)}>
         <sphereGeometry args={[0.13, 8, 6]} />
         <meshBasicMaterial visible={false} />
       </mesh>

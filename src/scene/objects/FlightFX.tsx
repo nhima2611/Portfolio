@@ -1,18 +1,20 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { blip } from '../../lib/sound';
+import { sceneState } from '../state';
 import { useSoftDot } from '../useCanvasTexture';
 
 /**
  * Airshow effects, driven imperatively by the jet: flares (burning dots that arc down trailing smoke),
- * a missile that drops, lights its motor and streaks out through the window, and the smoke for both.
- * Everything lives in fixed pools of points, so nothing is allocated mid-show.
+ * a four-missile salvo that drops from the weapons bay and streaks out through the window, an inbound threat
+ * that homes on the jet until a flare salvo lures it away and it detonates, and the smoke and fireballs for all
+ * of it. Everything lives in fixed pools, so nothing is allocated mid-show.
  */
 
-const FLARES = 64;
+const FLARES = 160; // flares, sparks and missile embers share this pool
 const SMOKE = 1200;
 const GRAVITY = -0.9;
-const WINDOW_TARGET = new THREE.Vector3(-1.05, 1.6, -0.5);
 
 interface Pool {
   pos: Float32Array;
@@ -38,18 +40,119 @@ function spawn(p: Pool, n: number, x: number, y: number, z: number, vx: number, 
 const flares = pool(FLARES);
 const smoke = pool(SMOKE);
 
-const missile = {
-  active: false,
-  age: 0,
-  pos: new THREE.Vector3(),
-  vel: new THREE.Vector3(),
-};
-
 const tmp = new THREE.Vector3();
 const tmp2 = new THREE.Vector3();
 
-/** One salvo: `count` flares thrown out to both sides and down from `at`, inheriting the jet's velocity. */
+/* ---------- Missiles: four outbound shots through the window, and one inbound threat ---------- */
+
+type MissileMode = 'outbound' | 'threat';
+interface Missile {
+  active: boolean;
+  mode: MissileMode;
+  age: number;
+  pos: THREE.Vector3;
+  vel: THREE.Vector3;
+  /** Outbound: the point outside the window it flies to. */
+  aim: THREE.Vector3;
+  /** Outbound: a point to pass through first (cruise missiles climb into the room before turning for the window). */
+  via: THREE.Vector3 | null;
+  /** Threat: index of the flare it has been decoyed onto, or -1 while it still tracks the jet. */
+  decoy: number;
+  /** Ground-launched: bigger motor flame and a trail of embers behind it. */
+  bright: boolean;
+  smokeTimer: number;
+}
+
+const MISSILES = 6;
+const missiles: Missile[] = Array.from({ length: MISSILES }, () => ({
+  active: false,
+  mode: 'outbound',
+  age: 0,
+  pos: new THREE.Vector3(),
+  vel: new THREE.Vector3(),
+  aim: new THREE.Vector3(),
+  via: null,
+  decoy: -1,
+  bright: false,
+  smokeTimer: 0,
+}));
+
+/** Four aim points beyond the window glass, so a salvo fans out instead of flying in one line. */
+const WINDOW_TARGETS = [
+  new THREE.Vector3(-1.3, 1.8, -0.6),
+  new THREE.Vector3(-0.85, 1.75, -0.6),
+  new THREE.Vector3(-1.2, 1.4, -0.6),
+  new THREE.Vector3(-0.9, 1.35, -0.6),
+];
+let salvoIndex = 0;
+
+/** Where the jet is right now: the threat homes on it. */
+const jetPosition = sceneState.jet;
+
+const blast = { intensity: 0, pos: new THREE.Vector3() };
+/** Where an outbound missile leaves through the glass (kept apart from `tmp`, which explode() reuses). */
+const exitPoint = new THREE.Vector3();
+
+/** A fireball: hot sparks flung outward, a smoke puff, a flash of light and a thump. */
+function explode(at: THREE.Vector3, size = 1) {
+  for (let i = 0; i < 14 * size; i++) {
+    tmp.set(Math.random() - 0.5, Math.random() - 0.4, Math.random() - 0.5).normalize().multiplyScalar(0.25 + Math.random() * 0.45 * size);
+    spawn(flares, FLARES, at.x, at.y, at.z, tmp.x, tmp.y, tmp.z, 0.35 + Math.random() * 0.25);
+  }
+  for (let i = 0; i < 26 * size; i++) {
+    spawn(smoke, SMOKE, at.x, at.y, at.z, (Math.random() - 0.5) * 0.25, (Math.random() - 0.3) * 0.2, (Math.random() - 0.5) * 0.25, 1.4 + Math.random());
+  }
+  blast.intensity = 5 * size;
+  blast.pos.copy(at);
+  blip('boom');
+}
+
+/** Launch at the tube mouth: a bright flash, sparks and a quick puff of smoke billowing out. */
+function launchFlash(at: THREE.Vector3) {
+  for (let i = 0; i < 10; i++) {
+    tmp.set(Math.random() - 0.5, Math.random() * 0.6, Math.random() - 0.5).normalize().multiplyScalar(0.15 + Math.random() * 0.25);
+    spawn(flares, FLARES, at.x, at.y, at.z, tmp.x, tmp.y, tmp.z, 0.25 + Math.random() * 0.2);
+  }
+  for (let i = 0; i < 18; i++) {
+    spawn(smoke, SMOKE, at.x, at.y, at.z, (Math.random() - 0.5) * 0.3, Math.random() * 0.12, (Math.random() - 0.5) * 0.3, 1.2 + Math.random() * 0.8);
+  }
+  blast.intensity = Math.max(blast.intensity, 2.5);
+  blast.pos.copy(at);
+}
+
+function freeMissile(): Missile | null {
+  return missiles.find((m) => !m.active) ?? null;
+}
+
+/**
+ * Fires one missile out of the window from `at`. From the jet it drops clear of the weapons bay first, then
+ * lights its motor; from a ground launcher (`fromTube`) the booster lights in the tube and it leaves along `velocity`.
+ */
+export function fireMissile(at: THREE.Vector3, velocity: THREE.Vector3, fromTube = false, via: THREE.Vector3 | null = null) {
+  const m = freeMissile();
+  if (!m) return;
+  Object.assign(m, { active: true, mode: 'outbound', age: fromTube ? 0.3 : 0, decoy: -1, smokeTimer: 0, bright: fromTube });
+  if (fromTube) launchFlash(at);
+  m.pos.copy(at);
+  m.vel.copy(velocity).multiplyScalar(fromTube ? 1 : 0.9);
+  if (!fromTube) m.vel.y -= 0.15;
+  m.aim.copy(WINDOW_TARGETS[salvoIndex++ % WINDOW_TARGETS.length]);
+  m.via = via;
+}
+
+/** An inbound missile from `from`, homing on the jet until flares lure it away. */
+export function launchThreat(from: THREE.Vector3) {
+  const m = freeMissile();
+  if (!m) return;
+  Object.assign(m, { active: true, mode: 'threat', age: 0.4, decoy: -1, smokeTimer: 0, bright: false });
+  m.pos.copy(from);
+  m.vel.set(jetPosition.x, jetPosition.y, jetPosition.z).sub(from).setLength(0.9);
+  blip('warning');
+}
+
+/** One salvo: `count` flares thrown out to both sides and down from `at`. Any threat in the air takes the bait. */
 export function fireFlares(at: THREE.Vector3, jetVelocity: THREE.Vector3, right: THREE.Vector3, count = 6) {
+  const first = flares.next;
   for (let i = 0; i < count; i++) {
     const side = i % 2 ? 1 : -1;
     const spread = 0.35 + Math.random() * 0.3;
@@ -57,58 +160,73 @@ export function fireFlares(at: THREE.Vector3, jetVelocity: THREE.Vector3, right:
     tmp.y += -0.05 + Math.random() * 0.25;
     spawn(flares, FLARES, at.x, at.y, at.z, tmp.x, tmp.y, tmp.z, 2.2 + Math.random() * 0.6);
   }
+  for (const m of missiles) if (m.active && m.mode === 'threat' && m.decoy < 0) m.decoy = first;
 }
 
-/** Releases the missile from the weapons bay at `at`; it falls clear, then lights up and heads for the window. */
-export function fireMissile(at: THREE.Vector3, jetVelocity: THREE.Vector3) {
-  missile.active = true;
-  missile.age = 0;
-  missile.pos.copy(at);
-  missile.vel.copy(jetVelocity).multiplyScalar(0.9);
-  missile.vel.y -= 0.15;
+function stepMissile(m: Missile, dt: number) {
+  m.age += dt;
+  const lit = m.age > 0.3;
+  if (!lit) {
+    m.vel.y += GRAVITY * dt;
+  } else {
+    // Pursuit: turn the velocity toward the target at a limited rate, accelerating to top speed.
+    if (m.mode === 'outbound' && m.via && m.pos.distanceTo(m.via) < 0.3) m.via = null;
+    if (m.mode === 'outbound') tmp.copy(m.via ?? m.aim);
+    else if (m.decoy >= 0) tmp.fromArray(flares.pos, m.decoy * 3);
+    else tmp.set(jetPosition.x, jetPosition.y, jetPosition.z);
+    const dist = tmp.distanceTo(m.pos);
+    tmp.sub(m.pos).normalize();
+    const turn = m.mode === 'outbound' ? 3 : m.decoy >= 0 ? 6 : 1.6;
+    const top = m.mode === 'outbound' ? 3.2 : 1.9;
+    const sp = Math.min(top, m.vel.length() + (m.mode === 'outbound' ? 5 : 1.4) * dt);
+    tmp2.copy(m.vel).normalize().lerp(tmp, Math.min(1, dt * turn)).normalize();
+    m.vel.copy(tmp2).multiplyScalar(sp);
+    m.smokeTimer += dt;
+    while (m.smokeTimer > 0.012) {
+      m.smokeTimer -= 0.012;
+      spawn(smoke, SMOKE, m.pos.x, m.pos.y, m.pos.z, (Math.random() - 0.5) * 0.03, 0.02, (Math.random() - 0.5) * 0.03, 1.6);
+    }
+    // Ground-launched rounds shed glowing embers: a bright streak of fire behind the motor.
+    if (m.bright && Math.random() < dt * 70) {
+      tmp2.copy(m.vel).multiplyScalar(-0.12);
+      spawn(flares, FLARES, m.pos.x, m.pos.y, m.pos.z, tmp2.x + (Math.random() - 0.5) * 0.04, tmp2.y, tmp2.z + (Math.random() - 0.5) * 0.04, 0.22 + Math.random() * 0.12);
+    }
+    // The threat detonates on the flare it chased. Safety net: it never reaches the jet, and gives up after a while.
+    if (m.mode === 'threat' && ((m.decoy >= 0 && dist < 0.06) || (m.decoy < 0 && dist < 0.3) || m.age > 7)) {
+      m.active = false;
+      explode(m.pos, 1);
+      return;
+    }
+  }
+  m.pos.addScaledVector(m.vel, dt);
+  // Outbound: out through the window, then a distant fireball glimpsed through the glass.
+  if (m.mode === 'outbound' && (m.pos.z < -0.47 || m.age > 4)) {
+    m.active = false;
+    explode(exitPoint.set(m.pos.x, m.pos.y, -0.46), 0.6);
+  }
 }
 
-function Missile() {
+function MissileMesh({ index }: { index: number }) {
   const group = useRef<THREE.Group>(null);
   const flame = useRef<THREE.Sprite>(null);
+  const flameMat = useRef<THREE.SpriteMaterial>(null);
   const dot = useSoftDot();
-  const smokeTimer = useRef(0);
 
   useFrame((_, delta) => {
     const g = group.current;
+    const m = missiles[index];
     if (!g) return;
-    const dt = Math.min(delta, 0.05);
-    g.visible = missile.active;
-    if (!missile.active) return;
-    missile.age += dt;
-    const lit = missile.age > 0.3;
-    if (!lit) {
-      missile.vel.y += GRAVITY * dt;
-    } else {
-      // Pure pursuit toward the window: turn the velocity toward the target, then accelerate.
-      tmp.copy(WINDOW_TARGET).sub(missile.pos).normalize();
-      const sp = Math.min(3.2, missile.vel.length() + 5 * dt);
-      tmp2.copy(missile.vel).normalize().lerp(tmp, Math.min(1, dt * 3)).normalize();
-      missile.vel.copy(tmp2).multiplyScalar(sp);
-      smokeTimer.current += dt;
-      while (smokeTimer.current > 0.012) {
-        smokeTimer.current -= 0.012;
-        spawn(smoke, SMOKE, missile.pos.x, missile.pos.y, missile.pos.z, (Math.random() - 0.5) * 0.03, 0.02, (Math.random() - 0.5) * 0.03, 1.6);
-      }
-    }
-    missile.pos.addScaledVector(missile.vel, dt);
-    g.position.copy(missile.pos);
-    g.lookAt(tmp.copy(missile.pos).add(missile.vel));
+    if (m.active) stepMissile(m, Math.min(delta, 0.05));
+    g.visible = m.active;
+    if (!m.active) return;
+    g.position.copy(m.pos);
+    g.lookAt(tmp.copy(m.pos).add(m.vel));
     if (flame.current) {
-      flame.current.visible = lit;
-      const s = 0.03 + Math.random() * 0.015;
+      flame.current.visible = m.age > 0.3;
+      const s = (m.bright ? 0.05 : 0.03) + Math.random() * 0.015;
       flame.current.scale.set(s, s, 1);
     }
-    // Out through the window: gone, with a brief glow on the glass.
-    if (missile.pos.z < -0.47 || missile.age > 4) {
-      missile.active = false;
-      for (let i = 0; i < 10; i++) spawn(smoke, SMOKE, missile.pos.x, missile.pos.y, -0.46, (Math.random() - 0.5) * 0.2, (Math.random() - 0.5) * 0.2, 0.05, 0.8);
-    }
+    flameMat.current?.color.set(m.mode === 'threat' ? '#ff5a3a' : '#ffb46b');
   });
 
   return (
@@ -129,7 +247,7 @@ function Missile() {
         </mesh>
       ))}
       <sprite ref={flame} position-z={-0.036}>
-        <spriteMaterial map={dot} color="#ffb46b" blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
+        <spriteMaterial ref={flameMat} map={dot} color="#ffb46b" blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
       </sprite>
     </group>
   );
@@ -161,6 +279,7 @@ export function FlightFX() {
   );
   const c = useMemo(() => new THREE.Color(), []);
   const flareLight = useRef<THREE.PointLight>(null);
+  const blastLight = useRef<THREE.PointLight>(null);
 
   useFrame((_, delta) => {
     const dt = Math.min(delta, 0.05);
@@ -202,6 +321,13 @@ export function FlightFX() {
       if (alive) flareLight.current.position.set(lx / alive, ly / alive, lz / alive);
     }
 
+    // Explosion flash: bright for an instant, gone in a quarter of a second.
+    blast.intensity *= Math.exp(-dt * 12);
+    if (blastLight.current) {
+      blastLight.current.intensity = blast.intensity;
+      blastLight.current.position.copy(blast.pos);
+    }
+
     const sc = smokeGeo.attributes.color as THREE.BufferAttribute;
     for (let i = 0; i < SMOKE; i++) {
       const life = smoke.life[i];
@@ -232,7 +358,10 @@ export function FlightFX() {
         <pointsMaterial map={dot} size={0.04} sizeAttenuation vertexColors transparent depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} />
       </points>
       <pointLight ref={flareLight} color="#ff9a4a" intensity={0} distance={2.5} decay={2} />
-      <Missile />
+      <pointLight ref={blastLight} color="#ffb070" intensity={0} distance={3} decay={2} />
+      {missiles.map((_, i) => (
+        <MissileMesh key={i} index={i} />
+      ))}
     </group>
   );
 }
