@@ -67,7 +67,7 @@ Bấm Launch (hoặc gõ `jet` trong terminal): Su-57 cất cánh từ mép trư
 - **`scene/flight.ts`**: kịch bản bay. Danh sách waypoint `[x, y, z, tốc độ]`, cửa sổ động tác (`MANOEUVRES`), thời điểm pháo sáng / tên lửa, thu/thả càng, camera. Spline được lấy mẫu sẵn thành bảng vị trí/tốc độ/thời gian/độ nghiêng nên mỗi frame chỉ là tra bảng. Độ nghiêng cánh theo công thức cua phối hợp `tan(bank) = v²κ/g`.
 - **`objects/ModelJet.tsx`**: dựng tư thế từ bảng + chồng động tác lên, bắn sự kiện.
 - **`objects/FlightFX.tsx`**: pháo sáng, khói, tên lửa (pool cố định, không cấp phát giữa show).
-- Camera bám máy bay từ điểm `VANTAGE` trong `config.ts`, cách `FOLLOW_DISTANCE`.
+- Camera chuyển sang một góc toàn cảnh cố định (`SHOW_CAMERA` trong `config.ts`), chỉ nghiêng nhẹ theo máy bay (`SHOW_TRACKING`).
 
 Sửa waypoint thì kiểm tra khoảng cách tới vật cản (màn hình, kệ, đèn, ghế) và độ cao không xuống dưới mặt bàn.
 

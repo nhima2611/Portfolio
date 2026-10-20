@@ -68,7 +68,7 @@ export const FLARE_SALVOS = [10.0, 10.3, 10.6];
 export const MISSILE_AT = 12.25;
 const GEAR_UP_AT = 3.6;
 const GEAR_DOWN_AT = 25.7;
-const PULL_OUT: [number, number] = [0.15, 1.2]; // follow-cam picks the jet up as the take-off roll starts…
+const PULL_OUT: [number, number] = [0.15, 1.2]; // camera settles into the wide shot as the take-off roll starts…
 const PULL_IN: [number, number] = [30.7, 31.95]; // …and hands back to the desk stop as it rolls to a halt
 /** Seconds spent turning 180° on the spot after the roll-out. */
 const TURN_AROUND = 2.2;

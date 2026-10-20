@@ -36,11 +36,11 @@ export const STOPS: CameraStop[] = [
 export const INTRO_CAMERA: [number, number, number] = [3.3, 2.35, 3.9];
 
 /**
- * Airshow camera: a spectator at VANTAGE following the jet with a zoom lens. The camera stays FOLLOW_DISTANCE
- * from the jet on the line toward VANTAGE, always looking at it.
+ * Airshow camera: one steady wide shot framing the whole flight area (window to chair, desk to ceiling).
+ * It only leans SHOW_TRACKING of the way toward the jet, so the frame stays calm while still feeling alive.
  */
-export const VANTAGE: [number, number, number] = [0.5, 1.7, 3.4];
-export const FOLLOW_DISTANCE = 1.7;
+export const SHOW_CAMERA: Pick<CameraStop, 'position' | 'target'> = { position: [0.4, 1.95, 4.3], target: [0.35, 1.38, 0.45] };
+export const SHOW_TRACKING = 0.2;
 
 /** Section ids, used by click-to-scroll on objects. */
 export const SECTION_IDS = ['intro', 'about', 'experience', 'toolkit', 'off-duty', 'contact'] as const;
